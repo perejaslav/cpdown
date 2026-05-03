@@ -1,0 +1,42 @@
+{
+   "action": {
+   },
+   "background": {
+      "service_worker": "background.js"
+   },
+   "commands": {
+      "copy-as-markdown": {
+         "description": "Copy current page as clean markdown",
+         "suggested_key": {
+            "default": "Ctrl+Shift+T",
+            "mac": "Ctrl+T"
+         }
+      }
+   },
+   "content_scripts": [ {
+      "js": [ "content-scripts/content.js" ],
+      "matches": [ "*://*/*" ]
+   } ],
+   "description": "Copy any webpage/YouTube subtitle as clean markdown",
+   "host_permissions": [ "\u003Call_urls>" ],
+   "icons": {
+      "128": "icon/128.png",
+      "16": "icon/16.png",
+      "32": "icon/32.png",
+      "48": "icon/48.png",
+      "96": "icon/96.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzcBS8nxHDZYVmVIPmUrKjkX6MgnlMKxH5Nj6hNCAtLO4c4eV4ZFL7YM3LDPQfx+b7sJzju/1P1BprHImjgTvMGtj4k2zn20UZ96BNg54fyRpURGBVLEjOFIVRVoO64nVmI8y5DT5qft0bFYcUo+qWpYKEusAM+wnTG1gRvNIIbFBnZ45i5sCfNDRhzrDUbed6FFdfGnD6IXup66oV1/WOsB93xWXDp9ghfEuMCetRcv1SEI4aLnpbPTtX444Ynbuo+rqS7uMI8Sv113MTsYU8kPXa/Gyz/+PYXqJBrNj+mA4s0jPGjGp3dXM8CbXySvx1WkFuBk1Ud6AdqnMUduQAQIDAQAB",
+   "manifest_version": 3,
+   "name": "cpdown",
+   "options_ui": {
+      "page": "options.html"
+   },
+   "permissions": [ "activeTab", "clipboardWrite", "scripting", "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.4.4",
+   "web_accessible_resources": [ {
+      "matches": [ "*://*.youtube.com/*" ],
+      "resources": [ "youtube-main-world.js" ]
+   } ]
+}
