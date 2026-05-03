@@ -14,7 +14,7 @@
       }
    },
    "content_scripts": [ {
-      "js": [ "content-scripts/content.js" ],
+      "js": [ "content-scripts/content.js", "content-scripts/save-selection.js" ],
       "matches": [ "*://*/*" ]
    } ],
    "description": "Copy any webpage/YouTube subtitle as clean markdown",
@@ -34,7 +34,7 @@
    },
    "permissions": [ "activeTab", "clipboardWrite", "scripting", "storage" ],
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "1.4.4",
+   "version": "1.4.5",
    "web_accessible_resources": [ {
       "matches": [ "*://*.youtube.com/*" ],
       "resources": [ "youtube-main-world.js" ]
