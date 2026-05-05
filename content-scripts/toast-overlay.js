@@ -8,11 +8,10 @@
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    // Matches Sonner dark theme values:
-    //   --normal-bg: #1A1A1A
-    //   --normal-border: #303030
-    //   --normal-text: #EDEDED
-    //   --border-radius: 8px
+    // Exact Sonner light theme + richColors success colors:
+    //   --success-bg: hsl(143, 85%, 96%) = #ECFDF3
+    //   --success-border: hsl(145, 92%, 87%) = #BFFCD9
+    //   --success-text: hsl(140, 100%, 27%) = #008A2E
     style.textContent = `
       #cpdown-toast-overlay {
         all: initial;
@@ -20,9 +19,9 @@
         top: 24px;
         right: 24px;
         z-index: 2147483647;
-        background: #1A1A1A;
-        border: 1px solid #303030;
-        color: #EDEDED;
+        background: #ECFDF3;
+        border: 1px solid #BFFCD9;
+        color: #008A2E;
         border-radius: 8px;
         padding: 16px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -40,28 +39,28 @@
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        margin-bottom: 2px;
+        gap: 8px;
       }
       #cpdown-toast-title {
         font-weight: 500;
         line-height: 1.5;
-        color: #EDEDED;
+        color: #008A2E;
         flex: 1;
         min-width: 0;
+        font-size: 13px;
       }
       #cpdown-toast-desc {
         font-weight: 400;
         line-height: 1.4;
-        color: #e8e8e8;
-        margin-bottom: 10px;
+        color: #008A2E;
+        opacity: 0.8;
+        margin: 0px 0 10px 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-size: 13px;
       }
       #cpdown-toast-close {
-        position: relative;
-        top: -2px;
-        right: -4px;
         flex-shrink: 0;
         width: 20px;
         height: 20px;
@@ -70,17 +69,20 @@
         align-items: center;
         padding: 0;
         color: #1A1A1A;
-        background: #EDEDED;
-        border: 1px solid #dbdbdb;
+        background: #fff;
+        border: 1px solid #EDEDED;
         border-radius: 50%;
         cursor: pointer;
-        font-size: 14px;
-        line-height: 1;
         transition: background 0.15s, border-color 0.15s;
+        margin-top: -2px;
+        margin-right: -4px;
       }
       #cpdown-toast-close:hover {
-        background: #d4d4d4;
-        border-color: #b0b0b0;
+        background: #F5F5F5;
+        border-color: #D4D4D4;
+      }
+      #cpdown-toast-close svg {
+        display: block;
       }
       #cpdown-toast-buttons {
         display: flex;
@@ -100,24 +102,24 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        transition: opacity 0.15s;
+        transition: opacity 0.2s, box-shadow 0.2s;
       }
       .cpdown-toast-btn:focus-visible {
         box-shadow: 0 0 0 2px rgba(0,0,0,0.4);
       }
       .cpdown-toast-btn-primary {
-        color: #1A1A1A;
-        background: #EDEDED;
+        color: #ECFDF3;
+        background: #008A2E;
       }
       .cpdown-toast-btn-primary:hover {
         opacity: 0.85;
       }
       .cpdown-toast-btn-secondary {
-        color: #EDEDED;
-        background: rgba(255,255,255,0.15);
+        color: #008A2E;
+        background: rgba(0,0,0,0.08);
       }
       .cpdown-toast-btn-secondary:hover {
-        background: rgba(255,255,255,0.25);
+        background: rgba(0,0,0,0.12);
       }
     `;
     document.head.appendChild(style);
@@ -132,7 +134,6 @@
     const overlay = document.createElement('div');
     overlay.id = 'cpdown-toast-overlay';
 
-    // Header: title row with close button
     const header = document.createElement('div');
     header.id = 'cpdown-toast-header';
 
@@ -142,23 +143,17 @@
 
     const closeBtn = document.createElement('button');
     closeBtn.id = 'cpdown-toast-close';
-    closeBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    `;
+    closeBtn.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
     closeBtn.setAttribute('aria-label', 'Close');
 
     header.appendChild(titleEl);
     header.appendChild(closeBtn);
 
-    // Description: video title
     const desc = document.createElement('div');
     desc.id = 'cpdown-toast-desc';
     desc.textContent = title || 'YouTube Video';
 
-    // Button row
     const buttonRow = document.createElement('div');
     buttonRow.id = 'cpdown-toast-buttons';
 
@@ -179,7 +174,6 @@
     document.body.appendChild(overlay);
 
     closeBtn.onclick = () => overlay.remove();
-
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) overlay.remove();
     });
@@ -196,7 +190,11 @@
     };
 
     saveBtn.onclick = () => {
-      const safeName = (title || 'transcript').replace(/[/\\?%*:|"<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'transcript';
+      const safeName = (title || 'transcript')
+        .replace(/[/\\?%*:|"<>]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120) || 'transcript';
       const blob = new Blob([markdown], { type: 'text/markdown' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
