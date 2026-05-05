@@ -8,72 +8,122 @@
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
+    // Matches Sonner dark theme values:
+    //   --normal-bg: #1A1A1A
+    //   --normal-border: #303030
+    //   --normal-text: #EDEDED
+    //   --border-radius: 8px
     style.textContent = `
       #cpdown-toast-overlay {
         all: initial;
         position: fixed;
-        bottom: 24px;
+        top: 24px;
         right: 24px;
         z-index: 2147483647;
-        background: #1a1a2e;
-        color: #e0e0e0;
-        border-radius: 12px;
-        padding: 16px 20px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
+        background: #1A1A1A;
+        border: 1px solid #303030;
+        color: #EDEDED;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        font-family: ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica Neue,Arial,Noto Sans,sans-serif;
+        font-size: 13px;
         line-height: 1.5;
-        max-width: 420px;
-        border: 1px solid rgba(255,255,255,0.1);
+        width: 360px;
         box-sizing: border-box;
       }
       #cpdown-toast-overlay * {
         all: revert;
         box-sizing: border-box;
       }
-      .cpdown-toast-close {
-        background: none;
-        border: none;
-        color: #888;
-        font-size: 22px;
-        cursor: pointer;
-        padding: 0 4px;
-        line-height: 1;
+      #cpdown-toast-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 2px;
       }
-      .cpdown-toast-close:hover { color: #fff; }
-      .cpdown-btn {
+      #cpdown-toast-title {
+        font-weight: 500;
+        line-height: 1.5;
+        color: #EDEDED;
         flex: 1;
-        padding: 8px 12px;
-        border-radius: 8px;
+        min-width: 0;
+      }
+      #cpdown-toast-desc {
+        font-weight: 400;
+        line-height: 1.4;
+        color: #e8e8e8;
+        margin-bottom: 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #cpdown-toast-close {
+        position: relative;
+        top: -2px;
+        right: -4px;
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+        color: #1A1A1A;
+        background: #EDEDED;
+        border: 1px solid #dbdbdb;
+        border-radius: 50%;
         cursor: pointer;
-        font-size: 13px;
+        font-size: 14px;
+        line-height: 1;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      #cpdown-toast-close:hover {
+        background: #d4d4d4;
+        border-color: #b0b0b0;
+      }
+      #cpdown-toast-buttons {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+      }
+      .cpdown-toast-btn {
+        border-radius: 4px;
+        padding: 0 8px;
+        height: 24px;
+        font-size: 12px;
         font-weight: 500;
         font-family: inherit;
-        transition: background 0.15s, opacity 0.15s;
+        cursor: pointer;
+        border: none;
+        outline: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: opacity 0.15s;
       }
-      .cpdown-btn-copy {
-        border: 1px solid #4ade80;
-        background: transparent;
-        color: #4ade80;
+      .cpdown-toast-btn:focus-visible {
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.4);
       }
-      .cpdown-btn-copy:hover { background: rgba(74,222,128,0.1); }
-      .cpdown-btn-save {
-        border: 1px solid #60a5fa;
-        background: transparent;
-        color: #60a5fa;
+      .cpdown-toast-btn-primary {
+        color: #1A1A1A;
+        background: #EDEDED;
       }
-      .cpdown-btn-save:hover { background: rgba(96,165,250,0.1); }
+      .cpdown-toast-btn-primary:hover {
+        opacity: 0.85;
+      }
+      .cpdown-toast-btn-secondary {
+        color: #EDEDED;
+        background: rgba(255,255,255,0.15);
+      }
+      .cpdown-toast-btn-secondary:hover {
+        background: rgba(255,255,255,0.25);
+      }
     `;
     document.head.appendChild(style);
   }
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  function showOverlay({ markdown, title, videoUrl }) {
+  function showOverlay({ markdown, title }) {
     const existing = document.getElementById('cpdown-toast-overlay');
     if (existing) existing.remove();
 
@@ -82,46 +132,49 @@
     const overlay = document.createElement('div');
     overlay.id = 'cpdown-toast-overlay';
 
+    // Header: title row with close button
     const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px';
-
-    const titleBlock = document.createElement('div');
-    titleBlock.style.cssText = 'flex:1;min-width:0';
-
-    const statusEl = document.createElement('div');
-    statusEl.style.cssText = 'font-weight:600;color:#4ade80;margin-bottom:4px';
-    statusEl.textContent = 'Transcript ready!';
+    header.id = 'cpdown-toast-header';
 
     const titleEl = document.createElement('div');
-    titleEl.style.cssText = 'font-size:13px;color:#aaa;word-break:break-word;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-    titleEl.textContent = title;
-
-    titleBlock.appendChild(statusEl);
-    titleBlock.appendChild(titleEl);
+    titleEl.id = 'cpdown-toast-title';
+    titleEl.textContent = 'Transcript ready!';
 
     const closeBtn = document.createElement('button');
-    closeBtn.className = 'cpdown-toast-close';
-    closeBtn.textContent = '\u00D7';
+    closeBtn.id = 'cpdown-toast-close';
+    closeBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    `;
     closeBtn.setAttribute('aria-label', 'Close');
 
-    header.appendChild(titleBlock);
+    header.appendChild(titleEl);
     header.appendChild(closeBtn);
 
+    // Description: video title
+    const desc = document.createElement('div');
+    desc.id = 'cpdown-toast-desc';
+    desc.textContent = title || 'YouTube Video';
+
+    // Button row
     const buttonRow = document.createElement('div');
-    buttonRow.style.cssText = 'display:flex;gap:8px';
+    buttonRow.id = 'cpdown-toast-buttons';
 
     const copyBtn = document.createElement('button');
-    copyBtn.className = 'cpdown-btn cpdown-btn-copy';
+    copyBtn.className = 'cpdown-toast-btn cpdown-toast-btn-primary';
     copyBtn.textContent = 'Copy';
 
     const saveBtn = document.createElement('button');
-    saveBtn.className = 'cpdown-btn cpdown-btn-save';
+    saveBtn.className = 'cpdown-toast-btn cpdown-toast-btn-secondary';
     saveBtn.textContent = 'Save .md';
 
     buttonRow.appendChild(copyBtn);
     buttonRow.appendChild(saveBtn);
 
     overlay.appendChild(header);
+    overlay.appendChild(desc);
     overlay.appendChild(buttonRow);
     document.body.appendChild(overlay);
 
@@ -135,26 +188,19 @@
       try {
         await navigator.clipboard.writeText(markdown);
         copyBtn.textContent = 'Copied!';
-        copyBtn.style.background = 'rgba(74,222,128,0.2)';
-        copyBtn.style.borderColor = '#4ade80';
-        setTimeout(() => {
-          copyBtn.textContent = 'Copy';
-          copyBtn.style.background = 'transparent';
-        }, 2000);
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
       } catch {
         copyBtn.textContent = 'Failed';
-        copyBtn.style.borderColor = '#ef4444';
-        copyBtn.style.color = '#ef4444';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
       }
     };
 
     saveBtn.onclick = () => {
-      const safeName = title.replace(/[/\\?%*:|"<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'transcript';
-      const fileName = `${safeName}.md`;
+      const safeName = (title || 'transcript').replace(/[/\\?%*:|"<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'transcript';
       const blob = new Blob([markdown], { type: 'text/markdown' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = fileName;
+      a.download = `${safeName}.md`;
       document.body.appendChild(a);
       a.click();
       a.remove();
