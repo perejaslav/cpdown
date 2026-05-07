@@ -1,36 +1,61 @@
 # cpdown
 
-Copy any webpage or YouTube subtitle as clean markdown.
+> 📄 Copy any webpage or YouTube subtitles as clean, LLM-ready Markdown.
 
-## Features
+**cpdown** is a lightweight browser extension for saving useful web content without the noise: articles, selected text, and YouTube transcripts.
 
-- **Toolbar button** — click the extension icon (or `Ctrl+Shift+T`) to copy the current page as Markdown
-- **Right-click context menu** — right-click any YouTube link → "cpdown: copy transcript" to extract subtitles without opening the video
-- **YouTube subtitles** — extracts video transcripts and formats them as Markdown
-- **Readability / Defuddle** — extracts main article content from any webpage
-- **Copy to clipboard** or **Save as .md file**
+---
 
-## Usage
+## ✨ Features
 
-1. Navigate to any page or YouTube video
-2. Click the cpdown icon in the toolbar (or press `Ctrl+Shift+T`)
-3. A toast appears with two options: **Copy** or **Save .md**
+- 🧭 **Toolbar button** — click the extension icon or press `Ctrl+Shift+T`
+- 🎬 **YouTube subtitles** — copy the current video's transcript as Markdown
+- 🖱️ **Right-click menu** — right-click a YouTube link → **Copy subtitles**
+- 🧼 **Readability / Defuddle** — extract clean article content from webpages
+- 📋 **Copy to clipboard** — copy Markdown instantly
+- 💾 **Save as `.md`** — download extracted content as a Markdown file
+- 🔢 **Token count** — transcript toasts show estimated token count
+- ✅ **Unified toast UI** — toolbar and context-menu flows use matching Sonner-style toasts
 
-To extract a YouTube transcript from a link without navigating to it:
-1. Right-click a YouTube link anywhere (Google, Twitter, etc.)
-2. Select **"cpdown: copy transcript"** from the context menu
-3. The transcript appears in a toast on the current page
+---
 
-## Permissions
+## 🚀 Usage
 
-- `activeTab` — access the current tab's content
-- `clipboardWrite` — copy content to clipboard
-- `contextMenus` — right-click menu for YouTube links
-- `scripting` — inject content scripts
-- `storage` — save user preferences
-- `<all_urls>` host permission — work on any page
+### Copy the current page
 
-## Build
+1. Open any webpage
+2. Click the **cpdown** toolbar icon or press `Ctrl+Shift+T`
+3. Use the toast buttons:
+   - **Copy** — copy Markdown to clipboard
+   - **Save .md** — save Markdown as a file
+
+### Copy YouTube subtitles from the current video
+
+1. Open a YouTube video
+2. Click the **cpdown** toolbar icon
+3. cpdown extracts the transcript using a hidden-tab flow for stable results
+4. A toast appears in the top-right corner with token count, **Copy**, and **Save .md**
+
+### Copy YouTube subtitles from a link
+
+1. Right-click any YouTube link (`youtube.com` or `youtu.be`)
+2. Select **Copy subtitles**
+3. cpdown opens the video in a hidden tab, extracts the transcript, closes the hidden tab, and shows the result on the original page
+
+---
+
+## 🔐 Permissions
+
+- `activeTab` — access the current active tab
+- `clipboardWrite` — copy Markdown to clipboard
+- `contextMenus` — show the YouTube link right-click menu
+- `scripting` — inject extraction scripts when needed
+- `storage` — store user preferences
+- `<all_urls>` — allow extraction from webpages
+
+---
+
+## 🛠️ Build
 
 Built with [WXT](https://wxt.dev) + React.
 
@@ -40,19 +65,42 @@ npm run dev    # development
 npm run build  # production
 ```
 
-## Changelog
+---
+
+## 🧾 Changelog
+
+### v1.5
+
+- **Fix:** Toolbar YouTube extraction is now stable on first click
+  - Uses the same hidden-tab extraction flow as the right-click menu
+  - Avoids stale YouTube SPA state when switching videos inside the same tab
+  - Prevents old video data from appearing after navigating to a new video
+- **Fix:** Current YouTube tab no longer closes after toolbar extraction
+- **Fix:** Removed duplicate context menu creation warning:
+  - `Cannot create item with duplicate id cpdown-transcript`
+- **New:** Transcript toasts now show estimated token count
+- **New:** Toolbar and context-menu transcript toasts now share the same Sonner-style design
+- **Change:** Context menu label shortened to **Copy subtitles**
+- **Chore:** Removed non-extension docs from the repository
+- **Chore:** Added `.gitignore` for local agent/analysis artifacts
 
 ### v1.4.6
 
 - **New:** Right-click context menu for YouTube transcript extraction
-  - Right-click any YouTube link → "cpdown: copy transcript"
+  - Right-click any YouTube link → **Copy subtitles**
   - Video opens in a hidden tab, transcript is extracted, tab is closed
-  - Toast with Copy / Save .md appears on the current page
+  - Toast with **Copy** / **Save .md** appears on the current page
   - Supports `youtube.com` and `youtu.be` links
 - **Fix:** Version display in options page synced with manifest
 - **Fix:** Typo `useDeffudle` → `useDefuddle`
 
 ### v1.4.5
 
-- Add selection save button to toast
-- Stabilize YouTube and options UI
+- Added selection save button to toast
+- Stabilized YouTube and options UI
+
+---
+
+## 📦 Current version
+
+**v1.5**
