@@ -1,8 +1,8 @@
 # cpdown
 
-> 📄 Copy any webpage or YouTube subtitles as clean, LLM-ready Markdown.
+> 📄 Copy any webpage, X.com content, or YouTube subtitles as clean, LLM-ready Markdown.
 
-**cpdown** is a lightweight browser extension for saving useful web content without the noise: articles, selected text, and YouTube transcripts.
+**cpdown** is a lightweight browser extension for saving useful web content without the noise: articles, selected text, X.com posts/articles, and YouTube transcripts.
 
 ---
 
@@ -12,6 +12,7 @@
 - 🎬 **YouTube subtitles** — copy the current video's transcript as Markdown
 - 🖱️ **Right-click menu** — right-click a YouTube link → **Copy subtitles**
 - 🧼 **Readability / Defuddle** — extract clean article content from webpages
+- ✕ **X.com extraction** — copy visible X.com posts, threads, and article-like pages as Markdown without paid APIs
 - 📋 **Copy to clipboard** — copy Markdown instantly
 - 💾 **Save as `.md`** — download extracted content as a Markdown file
 - 🔢 **Token count** — transcript toasts show estimated token count
@@ -28,6 +29,15 @@
 3. Use the toast buttons:
    - **Copy** — copy Markdown to clipboard
    - **Save .md** — save Markdown as a file
+
+### Copy X.com content
+
+1. Open an X.com / Twitter post, thread, or article-like page
+2. Wait until the content is visible on the page
+3. Click the **cpdown** toolbar icon or press `Ctrl+Shift+T`
+4. cpdown prepares a clean Markdown source from the visible X.com content and then uses the normal copy/save flow
+
+This feature reads the page already open in the browser. It does not use the official X API or any paid external API.
 
 ### Copy YouTube subtitles from the current video
 
@@ -51,7 +61,7 @@
 - `contextMenus` — show the YouTube link right-click menu
 - `scripting` — inject extraction scripts when needed
 - `storage` — store user preferences
-- `<all_urls>` — allow extraction from webpages
+- `<all_urls>` — allow extraction from webpages, including X.com pages already open in the browser
 
 ---
 
@@ -68,6 +78,13 @@ npm run build  # production
 ---
 
 ## 🧾 Changelog
+
+### Unreleased
+
+- **New:** X.com / Twitter Markdown extraction
+  - Works on visible X.com posts, threads, and article-like pages
+  - Adds a page-local adapter for X.com instead of using external APIs
+  - Preserves the existing YouTube and generic webpage extraction flows
 
 ### v1.5
 
