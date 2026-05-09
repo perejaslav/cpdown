@@ -3,9 +3,10 @@
   window.__cpdownXComExtractorLoaded = true;
 
   const SOURCE_ID = "cpdown-xcom-markdown-source";
-  const MIN_TEXT_LENGTH = 120;
-  const UPDATE_DELAY_MS = 450;
-  const PERIODIC_UPDATE_MS = 1500;
+  const STYLE_ID = "cpdown-xcom-markdown-source-style";
+  const UPDATE_DELAY_MS = 350;
+  const PERIODIC_UPDATE_MS = 1200;
+  const MIN_TEXT_LENGTH = 40;
 
   const UI_LINE_PATTERNS = [
     /^(reply|replies|repost|reposts|quote|quotes|like|likes|view|views|share|bookmark|bookmarks)$/i,
@@ -22,8 +23,17 @@
 
   if (!isXHost()) return;
 
-  function normalizeText(value) {
+  function decodeEntities(value) {
     return String(value || "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  }
+
+  function normalizeText(value) {
+    return decodeEntities(String(value || ""))
       .replace(/\u00a0/g, " ")
       .replace(/[ \t]+/g, " ")
       .replace(/\n[ \t]+/g, "\n")
@@ -43,10 +53,11 @@
   function isUiLine(line) {
     const value = normalizeText(line);
     if (!value) return true;
+    if (value.length > 240) return false;
     return UI_LINE_PATTERNS.some((pattern) => pattern.test(value));
   }
 
-  function cleanLines(text) {
+  function cleanText(text) {
     const seen = new Set();
     const lines = normalizeText(text)
       .split(/\n+/)
@@ -58,91 +69,65 @@
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    });
+    }).join("\n");
   }
 
-  function textFromElement(element) {
+  function useful(text) {
+    const value = normalizeText(text);
+    if (value.length < MIN_TEXT_LENGTH) return false;
+    const words = value.split(/\s+/).filter(Boolean).length;
+    return words >= 6;
+  }
+
+  function cloneText(element) {
     if (!element || !isVisible(element)) return "";
     const clone = element.cloneNode(true);
-    clone.querySelectorAll([
-      "script",
-      "style",
-      "svg",
-      "canvas",
-      "button",
-      "nav",
-      "[role='button']",
-      "[aria-label]",
-      "[data-testid='caret']",
-      "[data-testid='reply']",
-      "[data-testid='retweet']",
-      "[data-testid='like']",
-      "[data-testid='bookmark']",
-      "[data-testid='share']"
-    ].join(",")).forEach((node) => node.remove());
-    return normalizeText(clone.innerText || clone.textContent || "");
+    clone.querySelectorAll("script,style,svg,canvas,button,nav,[role='button'],[data-testid='reply'],[data-testid='retweet'],[data-testid='like'],[data-testid='bookmark'],[data-testid='share']")
+      .forEach((node) => node.remove());
+    return cleanText(clone.innerText || clone.textContent || "");
+  }
+
+  function collectBlocks() {
+    const root = document.querySelector("main") || document.body;
+    if (!root) return [];
+
+    const selectors = [
+      "[data-testid='tweetText']",
+      "[data-testid='cellInnerDiv']",
+      "article",
+      "[role='article']",
+      "div[lang]",
+      "main div"
+    ];
+
+    const blocks = [];
+    const seen = new Set();
+
+    for (const selector of selectors) {
+      root.querySelectorAll(selector).forEach((element) => {
+        const text = cloneText(element);
+        if (!useful(text)) return;
+        const key = text.toLowerCase();
+        if (seen.has(key)) return;
+        if (blocks.some((existing) => existing.includes(text) || text.includes(existing))) return;
+        seen.add(key);
+        blocks.push(text);
+      });
+    }
+
+    return blocks.sort((a, b) => b.length - a.length).slice(0, 8);
   }
 
   function getAuthorFromUrl() {
-    const parts = location.pathname.split("/").filter(Boolean);
-    if (!parts.length) return "";
-    const first = parts[0];
-    if (["home", "explore", "notifications", "messages", "i", "settings", "search"].includes(first)) return "";
+    const first = location.pathname.split("/").filter(Boolean)[0] || "";
+    if (!first || ["home", "explore", "notifications", "messages", "i", "settings", "search"].includes(first)) return "";
     return `@${first}`;
   }
 
   function getPageKind() {
-    if (/\/status\/\d+/i.test(location.pathname)) return "X.com post/thread";
+    if (/\/status\/\d+/i.test(location.pathname)) return "X.com post/thread/article";
     if (/\/articles?\//i.test(location.pathname)) return "X.com article";
     return "X.com page";
-  }
-
-  function collectTweetTexts() {
-    const blocks = [];
-    document.querySelectorAll("[data-testid='tweetText']").forEach((element) => {
-      const lines = cleanLines(textFromElement(element));
-      const text = lines.join("\n");
-      if (text.length >= 20) blocks.push(text);
-    });
-    return blocks;
-  }
-
-  function collectArticleCandidates() {
-    const root = document.querySelector("main") || document.body;
-    if (!root) return [];
-
-    return Array.from(root.querySelectorAll("article, [role='article'], div"))
-      .filter(isVisible)
-      .map((element) => cleanLines(textFromElement(element)).join("\n"))
-      .filter((text) => text.length >= MIN_TEXT_LENGTH)
-      .filter((text) => {
-        const lineCount = text.split("\n").length;
-        const wordCount = text.split(/\s+/).filter(Boolean).length;
-        return lineCount >= 2 || wordCount >= 35;
-      });
-  }
-
-  function pickBestBlocks() {
-    const tweetTexts = collectTweetTexts();
-    const candidates = collectArticleCandidates();
-    const combined = [...tweetTexts, ...candidates]
-      .map(normalizeText)
-      .filter(Boolean)
-      .sort((a, b) => b.length - a.length);
-
-    const selected = [];
-    const seen = new Set();
-
-    for (const text of combined) {
-      const key = text.toLowerCase();
-      if (seen.has(key)) continue;
-      if (selected.some((existing) => existing.includes(text) || text.includes(existing))) continue;
-      seen.add(key);
-      selected.push(text);
-      if (selected.join("\n\n").length > 30000) break;
-    }
-
-    return selected;
   }
 
   function escapeHtml(value) {
@@ -153,6 +138,33 @@
       .replace(/"/g, "&quot;");
   }
 
+  function ensureStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+      #${SOURCE_ID} {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 760px !important;
+        max-width: 760px !important;
+        max-height: 2px !important;
+        overflow: hidden !important;
+        opacity: .02 !important;
+        pointer-events: none !important;
+        user-select: text !important;
+        z-index: 1 !important;
+        background: white !important;
+        color: black !important;
+        font-size: 16px !important;
+        line-height: 1.5 !important;
+      }
+      #${SOURCE_ID} * { color: black !important; background: transparent !important; }
+    `;
+    document.documentElement.appendChild(style);
+  }
+
   function renderSource(blocks) {
     const existing = document.getElementById(SOURCE_ID);
     if (!blocks.length) {
@@ -160,17 +172,18 @@
       return;
     }
 
+    ensureStyle();
+
     const title = document.title || getPageKind();
     const author = getAuthorFromUrl();
-    const source = location.href;
-
+    const body = blocks.map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`).join("\n");
     const html = `
-      <article id="${SOURCE_ID}" data-cpdown-xcom-source="true">
+      <article id="${SOURCE_ID}" role="article" data-cpdown-xcom-source="true">
         <h1>${escapeHtml(title)}</h1>
-        <p><strong>Source:</strong> ${escapeHtml(source)}</p>
+        <p><strong>Source:</strong> ${escapeHtml(location.href)}</p>
         ${author ? `<p><strong>Author:</strong> ${escapeHtml(author)}</p>` : ""}
         <p><strong>Content type:</strong> ${escapeHtml(getPageKind())}</p>
-        ${blocks.map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`).join("\n")}
+        ${body}
       </article>
     `;
 
@@ -178,34 +191,20 @@
     template.innerHTML = html.trim();
     const sourceNode = template.content.firstElementChild;
 
-    sourceNode.style.cssText = [
-      "position:absolute",
-      "left:-100000px",
-      "top:0",
-      "width:720px",
-      "max-width:720px",
-      "height:auto",
-      "overflow:visible",
-      "pointer-events:none",
-      "user-select:text",
-      "z-index:-1",
-      "background:white",
-      "color:black"
-    ].join(";");
-
     existing?.remove();
-    (document.body || document.documentElement).prepend(sourceNode);
+    const main = document.querySelector("main");
+    if (main?.parentNode) main.parentNode.insertBefore(sourceNode, main);
+    else (document.body || document.documentElement).prepend(sourceNode);
   }
 
   let updateTimer = null;
-  let lastUrl = location.href;
   let lastText = "";
+  let lastUrl = location.href;
 
-  function scheduleUpdate() {
+  function update() {
     clearTimeout(updateTimer);
     updateTimer = setTimeout(() => {
-      if (!isXHost()) return;
-      const blocks = pickBestBlocks();
+      const blocks = collectBlocks();
       const text = blocks.join("\n\n");
       if (text !== lastText || location.href !== lastUrl) {
         lastText = text;
@@ -215,22 +214,14 @@
     }, UPDATE_DELAY_MS);
   }
 
-  const observer = new MutationObserver(scheduleUpdate);
+  const observer = new MutationObserver(update);
 
   function start() {
-    scheduleUpdate();
-    if (document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-    setInterval(() => {
-      if (location.href !== lastUrl) scheduleUpdate();
-      else if (!document.getElementById(SOURCE_ID)) scheduleUpdate();
-    }, PERIODIC_UPDATE_MS);
+    update();
+    if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+    setInterval(update, PERIODIC_UPDATE_MS);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
 })();
