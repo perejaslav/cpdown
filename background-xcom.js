@@ -39,6 +39,7 @@
           /^\d+([.,]\d+)?\s*[kmb]?$/i,
           /^\d+\s+(reply|replies|repost|reposts|quote|quotes|like|likes|view|views)$/i
         ];
+
         const LANG_MARKERS = new Set(["python", "bash", "sh", "shell", "yaml", "yml", "json", "javascript", "js"]);
 
         function normalizeSpaces(value) {
@@ -64,20 +65,11 @@
           try { return new URL(href, location.href).href; } catch { return href || ""; }
         }
 
-        function normalizeLang(lang) {
-          const value = String(lang || "").toLowerCase();
-          if (value === "sh" || value === "shell") return "bash";
-          if (value === "yml") return "yaml";
-          if (value === "js") return "javascript";
-          return value;
-        }
-
         function codeFence(text, lang = "") {
           const value = String(text || "").replace(/\n{3,}/g, "\n\n").trim();
           if (!value) return "";
-          if (/^`{3,4}/.test(value)) return `\n\n${value}\n\n`;
           const fence = value.includes("```") ? "````" : "```";
-          return `\n\n${fence}${normalizeLang(lang)}\n${value}\n${fence}\n\n`;
+          return `\n\n${fence}${lang}\n${value}\n${fence}\n\n`;
         }
 
         function nodeToMarkdown(node, insideCode = false) {
@@ -115,73 +107,49 @@
             if (url === inner) return url;
             return `[${inner}](${url})`;
           }
+
           return children;
         }
 
         function looksLikeCodeLine(line) {
           const value = String(line || "").trim();
-          return /^(import |from |def |class |if |elif |else:|for |while |try:|except |finally:|with |return\b|print\(|async |await |raise\b|break\b|continue\b|pass\b|[a-zA-Z_][\w_]*\s*=|r\s*=\s*requests\.|requests\.|subprocess\.|open\(|os\.|sys\.|json=|headers=|payload=|curl\b|pip\b|npm\b|git\b|docker\b|python3?\b|crontab\b|mkdir\b|gbrain\b|which\b|find\b|[A-Z_]+\s*=)/.test(value) || (/[:{}[\],]$/.test(value) && /[=:{}/]/.test(value));
+          return /^(import |from |def |class |if |elif |else:|for |while |try:|except |with |return\b|print\(|async |await |[a-zA-Z_][\w_]*\s*=|r\s*=\s*requests\.|requests\.|subprocess\.|open\(|os\.|sys\.|json=|headers=|payload=|curl\b|pip\b|npm\b|git\b|docker\b|python3?\b|crontab\b|mkdir\b|gbrain\b|which\b|find\b|[A-Z_]+\s*=)/.test(value) || /[:{}[\],]$/.test(value) && /[=:{}/]/.test(value);
         }
 
         function looksLikeYamlLine(line) {
           return /^\s*[A-Za-z0-9_.-]+:\s*(\||>|.*)?$/.test(line) || /^\s*-\s+/.test(line);
         }
 
-        function fixStuckLanguageMarkers(text) {
-          return String(text || "")
-            .replace(/([A-Za-z0-9_./~)-])(python|bash|yaml|yml|json|javascript|js)(\n|$)/g, "$1\n$2\n")
-            .replace(/(python|bash|yaml|yml|json|javascript|js)(python3|pip|npm|git|docker|gbrain|find|which|crontab|mkdir)/g, "$1\n$2")
-            .replace(/(default:)yaml/g, "$1\nyaml");
-        }
-
-        function tokenizeFences(markdown) {
-          const tokens = [];
-          let index = 0;
-          const protectedText = String(markdown || "").replace(/`{3,4}[\s\S]*?`{3,4}/g, (match) => {
-            const token = `@@CPDOWN_FENCE_${index++}@@`;
-            tokens.push([token, match.trim()]);
-            return `\n${token}\n`;
-          });
-          return { protectedText, tokens };
-        }
-
-        function restoreFences(markdown, tokens) {
-          let result = markdown;
-          for (const [token, value] of tokens) result = result.replace(token, value);
-          return result;
+        function normalizeLang(lang) {
+          const value = String(lang || "").toLowerCase();
+          if (value === "sh" || value === "shell") return "bash";
+          if (value === "yml") return "yaml";
+          if (value === "js") return "javascript";
+          return value;
         }
 
         function rebuildLanguageBlocks(markdown) {
-          const { protectedText, tokens } = tokenizeFences(markdown);
-          const rawLines = fixStuckLanguageMarkers(protectedText).split(/\n+/).map((line) => line.trim()).filter(Boolean);
+          const rawLines = String(markdown || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
           const output = [];
           let i = 0;
 
           while (i < rawLines.length) {
             const line = rawLines[i];
-            if (/^@@CPDOWN_FENCE_\d+@@$/.test(line)) {
-              output.push(line);
-              i += 1;
-              continue;
-            }
 
-            const lower = line.toLowerCase();
-            if (LANG_MARKERS.has(lower) && i + 1 < rawLines.length) {
-              const lang = normalizeLang(lower);
+            if (LANG_MARKERS.has(line.toLowerCase()) && i + 1 < rawLines.length) {
+              const lang = normalizeLang(line.toLowerCase());
               const codeLines = [];
               let j = i + 1;
               while (j < rawLines.length) {
                 const next = rawLines[j];
                 const nextLower = next.toLowerCase();
-                if (/^@@CPDOWN_FENCE_\d+@@$/.test(next)) break;
                 if (LANG_MARKERS.has(nextLower)) break;
                 const codeish = lang === "yaml" ? looksLikeYamlLine(next) : looksLikeCodeLine(next);
-                const prose = next.length > 110 && /[.!?]$/.test(next);
-                if (!codeish && prose) break;
-                if (!codeish && codeLines.length > 0 && /^[A-Z][a-z].*[.!?]$/.test(next)) break;
+                if (!codeish && codeLines.length > 0 && next.length > 120 && /[.!?]$/.test(next)) break;
+                if (!codeish && codeLines.length === 0 && next.length > 120 && /[.!?]$/.test(next)) break;
                 codeLines.push(next);
                 j += 1;
-                if (codeLines.length > 120) break;
+                if (codeLines.length > 80) break;
               }
               if (codeLines.length) {
                 output.push(codeFence(codeLines.join("\n"), lang));
@@ -194,29 +162,31 @@
             i += 1;
           }
 
-          return restoreFences(output.join("\n\n"), tokens).replace(/\n{3,}/g, "\n\n").trim();
+          return output.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
         }
 
         function cleanMarkdown(markdown) {
           const rebuilt = rebuildLanguageBlocks(markdown);
-          const { protectedText, tokens } = tokenizeFences(rebuilt);
-          const lines = protectedText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+          const lines = rebuilt.split(/\n+/).map((line) => line.trim()).filter((line) => line && !isUiLine(line));
           const output = [];
           const seen = new Set();
+          let inFence = false;
 
           for (const line of lines) {
-            if (/^@@CPDOWN_FENCE_\d+@@$/.test(line)) {
+            if (line.startsWith("```")) {
+              inFence = !inFence;
               output.push(line);
               continue;
             }
-            if (isUiLine(line)) continue;
-            const key = line.toLowerCase();
-            if (seen.has(key) && line.length > 20) continue;
-            seen.add(key);
+            if (!inFence) {
+              const key = line.toLowerCase();
+              if (seen.has(key) && line.length > 20) continue;
+              seen.add(key);
+            }
             output.push(line);
           }
 
-          return restoreFences(output.join("\n\n"), tokens).replace(/\n{3,}/g, "\n\n").trim();
+          return output.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
         }
 
         function useful(markdown) {
@@ -251,7 +221,11 @@
           const toast = document.createElement("div");
           toast.id = id;
           toast.textContent = message;
-          toast.style.cssText = ["position:fixed", "right:18px", "top:18px", "z-index:2147483647", "max-width:380px", "padding:12px 14px", "border-radius:10px", "font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif", "box-shadow:0 8px 30px rgba(0,0,0,.22)", `background:${type === "error" ? "#7f1d1d" : "#14532d"}`, "color:#fff"].join(";");
+          toast.style.cssText = [
+            "position:fixed", "right:18px", "top:18px", "z-index:2147483647", "max-width:380px",
+            "padding:12px 14px", "border-radius:10px", "font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif",
+            "box-shadow:0 8px 30px rgba(0,0,0,.22)", `background:${type === "error" ? "#7f1d1d" : "#14532d"}`, "color:#fff"
+          ].join(";");
           document.documentElement.appendChild(toast);
           setTimeout(() => toast.remove(), 4500);
         }
@@ -275,18 +249,27 @@
 
         const blocks = collectBlocks();
         if (!blocks.length) {
-          showPageToast("cpdown X.com alpha 5: no text blocks found", "error");
+          showPageToast("cpdown X.com alpha 3: no text blocks found", "error");
           return { ok: false, error: "No text blocks found" };
         }
 
         const author = authorFromUrl();
-        const markdown = [`# ${document.title || "X.com content"}`, "", `**Source:** ${location.href}`, author ? `**Author:** ${author}` : "", "", "---", "", blocks.join("\n\n")].filter(Boolean).join("\n");
+        const markdown = [
+          `# ${document.title || "X.com content"}`,
+          "",
+          `**Source:** ${location.href}`,
+          author ? `**Author:** ${author}` : "",
+          "",
+          "---",
+          "",
+          blocks.join("\n\n")
+        ].filter(Boolean).join("\n");
 
         return copyMarkdown(markdown).then(() => {
-          showPageToast(`cpdown X.com alpha 5: copied ${blocks.length} block(s)`);
+          showPageToast(`cpdown X.com alpha 3: copied ${blocks.length} block(s)`);
           return { ok: true, blockCount: blocks.length };
         }).catch((error) => {
-          showPageToast(`cpdown X.com alpha 5: copy failed (${error.message})`, "error");
+          showPageToast(`cpdown X.com alpha 3: copy failed (${error.message})`, "error");
           return { ok: false, error: error.message };
         });
       }
