@@ -34,8 +34,8 @@
    },
    "permissions": [ "activeTab", "clipboardWrite", "contextMenus", "scripting", "storage" ],
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "1.6",
-   "version_name": "1.6 alpha",
+   "version": "1.6.1",
+   "version_name": "1.6 alpha 2",
    "web_accessible_resources": [ {
       "matches": [ "*://*.youtube.com/*" ],
       "resources": [ "youtube-main-world.js" ]
