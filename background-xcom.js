@@ -40,6 +40,8 @@
           /^\d+\s+(reply|replies|repost|reposts|quote|quotes|like|likes|view|views)$/i
         ];
 
+        const LANG_MARKERS = new Set(["python", "bash", "sh", "shell", "yaml", "yml", "json", "javascript", "js"]);
+
         function normalizeSpaces(value) {
           return String(value || "")
             .replace(/\u00a0/g, " ")
@@ -56,33 +58,23 @@
         }
 
         function escapeInline(value) {
-          return String(value || "").replace(/\s+/g, " ");
+          return String(value || "").replace(/[ \t]+/g, " ");
         }
 
         function absoluteUrl(href) {
           try { return new URL(href, location.href).href; } catch { return href || ""; }
         }
 
-        function isCodeLike(element) {
-          if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
-          const tag = element.tagName.toLowerCase();
-          if (tag === "code" || tag === "pre") return true;
-          const cls = String(element.className || "").toLowerCase();
-          const label = String(element.getAttribute("aria-label") || "").toLowerCase();
-          const text = element.textContent || "";
-          return /code|syntax|highlight|monospace/.test(cls + " " + label) || /(^|\n)\s*(const|let|var|function|class|import|export|def|async|await|curl|pip|npm|git|docker|python|node)\b/.test(text);
-        }
-
-        function codeFence(text) {
+        function codeFence(text, lang = "") {
           const value = String(text || "").replace(/\n{3,}/g, "\n\n").trim();
           if (!value) return "";
           const fence = value.includes("```") ? "````" : "```";
-          return `\n\n${fence}\n${value}\n${fence}\n\n`;
+          return `\n\n${fence}${lang}\n${value}\n${fence}\n\n`;
         }
 
         function nodeToMarkdown(node, insideCode = false) {
           if (!node) return "";
-          if (node.nodeType === Node.TEXT_NODE) return escapeInline(node.nodeValue || "");
+          if (node.nodeType === Node.TEXT_NODE) return insideCode ? (node.nodeValue || "") : escapeInline(node.nodeValue || "");
           if (node.nodeType !== Node.ELEMENT_NODE) return "";
 
           const tag = node.tagName.toLowerCase();
@@ -91,13 +83,10 @@
 
           if (tag === "pre") return codeFence(node.textContent || "");
           if (tag === "code") {
+            const parentTag = node.parentElement?.tagName?.toLowerCase();
+            if (parentTag === "pre") return codeFence(node.textContent || "");
             const text = (node.textContent || "").replace(/`/g, "\\`").trim();
             return text ? `\`${text}\`` : "";
-          }
-
-          if (!insideCode && isCodeLike(node)) {
-            const text = node.textContent || "";
-            if (text.includes("\n") || text.length > 80) return codeFence(text);
           }
 
           const children = Array.from(node.childNodes).map((child) => nodeToMarkdown(child, insideCode || tag === "code" || tag === "pre")).join("");
@@ -119,24 +108,85 @@
             return `[${inner}](${url})`;
           }
 
-          if (["article", "section", "div"].includes(tag)) return children;
           return children;
         }
 
-        function cleanMarkdown(markdown) {
-          const lines = normalizeSpaces(markdown)
-            .split(/\n+/)
-            .map((line) => line.trim())
-            .filter((line) => line && !isUiLine(line));
+        function looksLikeCodeLine(line) {
+          const value = String(line || "").trim();
+          return /^(import |from |def |class |if |elif |else:|for |while |try:|except |with |return\b|print\(|async |await |[a-zA-Z_][\w_]*\s*=|r\s*=\s*requests\.|requests\.|subprocess\.|open\(|os\.|sys\.|json=|headers=|payload=|curl\b|pip\b|npm\b|git\b|docker\b|python3?\b|crontab\b|mkdir\b|gbrain\b|which\b|find\b|[A-Z_]+\s*=)/.test(value) || /[:{}[\],]$/.test(value) && /[=:{}/]/.test(value);
+        }
 
+        function looksLikeYamlLine(line) {
+          return /^\s*[A-Za-z0-9_.-]+:\s*(\||>|.*)?$/.test(line) || /^\s*-\s+/.test(line);
+        }
+
+        function normalizeLang(lang) {
+          const value = String(lang || "").toLowerCase();
+          if (value === "sh" || value === "shell") return "bash";
+          if (value === "yml") return "yaml";
+          if (value === "js") return "javascript";
+          return value;
+        }
+
+        function rebuildLanguageBlocks(markdown) {
+          const rawLines = String(markdown || "").split(/\n+/).map((line) => line.trim()).filter(Boolean);
+          const output = [];
+          let i = 0;
+
+          while (i < rawLines.length) {
+            const line = rawLines[i];
+            const langCandidate = normalizeLang(line.toLowerCase());
+
+            if (LANG_MARKERS.has(line.toLowerCase()) && i + 1 < rawLines.length) {
+              const lang = normalizeLang(line.toLowerCase());
+              const codeLines = [];
+              let j = i + 1;
+              while (j < rawLines.length) {
+                const next = rawLines[j];
+                const nextLower = next.toLowerCase();
+                if (LANG_MARKERS.has(nextLower)) break;
+                const codeish = lang === "yaml" ? looksLikeYamlLine(next) : looksLikeCodeLine(next);
+                if (!codeish && codeLines.length > 0 && next.length > 120 && /[.!?]$/.test(next)) break;
+                if (!codeish && codeLines.length === 0 && next.length > 120 && /[.!?]$/.test(next)) break;
+                codeLines.push(next);
+                j += 1;
+                if (codeLines.length > 80) break;
+              }
+              if (codeLines.length) {
+                output.push(codeFence(codeLines.join("\n"), lang));
+                i = j;
+                continue;
+              }
+            }
+
+            if (!isUiLine(line)) output.push(line);
+            i += 1;
+          }
+
+          return output.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+        }
+
+        function cleanMarkdown(markdown) {
+          const rebuilt = rebuildLanguageBlocks(markdown);
+          const lines = rebuilt.split(/\n+/).map((line) => line.trim()).filter((line) => line && !isUiLine(line));
           const output = [];
           const seen = new Set();
+          let inFence = false;
+
           for (const line of lines) {
-            const key = line.toLowerCase();
-            if (seen.has(key) && line.length > 20) continue;
-            seen.add(key);
+            if (line.startsWith("```")) {
+              inFence = !inFence;
+              output.push(line);
+              continue;
+            }
+            if (!inFence) {
+              const key = line.toLowerCase();
+              if (seen.has(key) && line.length > 20) continue;
+              seen.add(key);
+            }
             output.push(line);
           }
+
           return output.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
         }
 
@@ -200,7 +250,7 @@
 
         const blocks = collectBlocks();
         if (!blocks.length) {
-          showPageToast("cpdown X.com alpha 2: no text blocks found", "error");
+          showPageToast("cpdown X.com alpha 3: no text blocks found", "error");
           return { ok: false, error: "No text blocks found" };
         }
 
@@ -217,10 +267,10 @@
         ].filter(Boolean).join("\n");
 
         return copyMarkdown(markdown).then(() => {
-          showPageToast(`cpdown X.com alpha 2: copied ${blocks.length} block(s)`);
+          showPageToast(`cpdown X.com alpha 3: copied ${blocks.length} block(s)`);
           return { ok: true, blockCount: blocks.length };
         }).catch((error) => {
-          showPageToast(`cpdown X.com alpha 2: copy failed (${error.message})`, "error");
+          showPageToast(`cpdown X.com alpha 3: copy failed (${error.message})`, "error");
           return { ok: false, error: error.message };
         });
       }
