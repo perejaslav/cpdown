@@ -51,13 +51,13 @@
             .trim();
         }
 
-        function normalizeCodeLine(value) {
-          return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+$/g, "");
-        }
-
         function isUiLine(line) {
           const value = normalizeSpaces(line);
           return !value || UI_LINE_PATTERNS.some((pattern) => pattern.test(value));
+        }
+
+        function escapeInline(value) {
+          return String(value || "").replace(/[ \t]+/g, " ");
         }
 
         function absoluteUrl(href) {
@@ -73,18 +73,16 @@
         }
 
         function codeFence(text, lang = "") {
-          let value = String(text || "").replace(/\n{3,}/g, "\n\n").trim();
+          const value = String(text || "").replace(/\n{3,}/g, "\n\n").trim();
           if (!value) return "";
-          const normalizedLang = normalizeLang(lang);
-          if (normalizedLang === "python") value = repairPythonIndent(value);
-          if (normalizedLang === "yaml") value = repairYamlIndent(value);
+          if (/^`{3,4}/.test(value)) return `\n\n${value}\n\n`;
           const fence = value.includes("```") ? "````" : "```";
-          return `\n\n${fence}${normalizedLang}\n${value}\n${fence}\n\n`;
+          return `\n\n${fence}${normalizeLang(lang)}\n${value}\n${fence}\n\n`;
         }
 
         function nodeToMarkdown(node, insideCode = false) {
           if (!node) return "";
-          if (node.nodeType === Node.TEXT_NODE) return insideCode ? (node.nodeValue || "") : String(node.nodeValue || "").replace(/[ \t]+/g, " ");
+          if (node.nodeType === Node.TEXT_NODE) return insideCode ? (node.nodeValue || "") : escapeInline(node.nodeValue || "");
           if (node.nodeType !== Node.ELEMENT_NODE) return "";
 
           const tag = node.tagName.toLowerCase();
@@ -129,44 +127,6 @@
           return /^\s*[A-Za-z0-9_.-]+:\s*(\||>|.*)?$/.test(line) || /^\s*-\s+/.test(line);
         }
 
-        function repairPythonIndent(text) {
-          const lines = String(text || "").split(/\n+/).map((line) => normalizeCodeLine(line).trim()).filter(Boolean);
-          const out = [];
-          let indent = 0;
-          const dedentStarters = /^(elif\b|else:|except\b|finally:)/;
-          const blockStarters = /:\s*(#.*)?$/;
-          const dedentAfter = /^(return\b|raise\b|break\b|continue\b|pass\b)/;
-
-          for (const raw of lines) {
-            let line = raw;
-            if (dedentStarters.test(line)) indent = Math.max(0, indent - 1);
-            out.push(`${"    ".repeat(indent)}${line}`);
-            if (blockStarters.test(line)) indent += 1;
-            if (dedentAfter.test(line)) indent = Math.max(1, indent - 1);
-          }
-          return out.join("\n");
-        }
-
-        function repairYamlIndent(text) {
-          const lines = String(text || "").split(/\n+/).map((line) => normalizeCodeLine(line).trim()).filter(Boolean);
-          const out = [];
-          let indent = 0;
-          for (const line of lines) {
-            if (/^[A-Za-z0-9_.-]+:\s*\|$/.test(line)) {
-              out.push(`${"  ".repeat(indent)}${line}`);
-              indent += 1;
-            } else if (/^[A-Za-z0-9_.-]+:/.test(line)) {
-              indent = 0;
-              out.push(line);
-            } else if (/^-\s+/.test(line)) {
-              out.push(`${"  ".repeat(Math.max(0, indent))}${line}`);
-            } else {
-              out.push(`${"  ".repeat(Math.max(0, indent))}${line}`);
-            }
-          }
-          return out.join("\n");
-        }
-
         function fixStuckLanguageMarkers(text) {
           return String(text || "")
             .replace(/([A-Za-z0-9_./~)-])(python|bash|yaml|yml|json|javascript|js)(\n|$)/g, "$1\n$2\n")
@@ -174,12 +134,37 @@
             .replace(/(default:)yaml/g, "$1\nyaml");
         }
 
+        function tokenizeFences(markdown) {
+          const tokens = [];
+          let index = 0;
+          const protectedText = String(markdown || "").replace(/`{3,4}[\s\S]*?`{3,4}/g, (match) => {
+            const token = `@@CPDOWN_FENCE_${index++}@@`;
+            tokens.push([token, match.trim()]);
+            return `\n${token}\n`;
+          });
+          return { protectedText, tokens };
+        }
+
+        function restoreFences(markdown, tokens) {
+          let result = markdown;
+          for (const [token, value] of tokens) result = result.replace(token, value);
+          return result;
+        }
+
         function rebuildLanguageBlocks(markdown) {
-          const rawLines = fixStuckLanguageMarkers(markdown).split(/\n+/).map((line) => line.trim()).filter(Boolean);
+          const { protectedText, tokens } = tokenizeFences(markdown);
+          const rawLines = fixStuckLanguageMarkers(protectedText).split(/\n+/).map((line) => line.trim()).filter(Boolean);
           const output = [];
           let i = 0;
+
           while (i < rawLines.length) {
             const line = rawLines[i];
+            if (/^@@CPDOWN_FENCE_\d+@@$/.test(line)) {
+              output.push(line);
+              i += 1;
+              continue;
+            }
+
             const lower = line.toLowerCase();
             if (LANG_MARKERS.has(lower) && i + 1 < rawLines.length) {
               const lang = normalizeLang(lower);
@@ -188,11 +173,11 @@
               while (j < rawLines.length) {
                 const next = rawLines[j];
                 const nextLower = next.toLowerCase();
+                if (/^@@CPDOWN_FENCE_\d+@@$/.test(next)) break;
                 if (LANG_MARKERS.has(nextLower)) break;
                 const codeish = lang === "yaml" ? looksLikeYamlLine(next) : looksLikeCodeLine(next);
                 const prose = next.length > 110 && /[.!?]$/.test(next);
-                if (!codeish && prose && codeLines.length > 0) break;
-                if (!codeish && prose && codeLines.length === 0) break;
+                if (!codeish && prose) break;
                 if (!codeish && codeLines.length > 0 && /^[A-Z][a-z].*[.!?]$/.test(next)) break;
                 codeLines.push(next);
                 j += 1;
@@ -204,28 +189,23 @@
                 continue;
               }
             }
+
             if (!isUiLine(line)) output.push(line);
             i += 1;
           }
-          return output.join("\n\n").replace(/\n{3,}/g, "\n\n").trim();
+
+          return restoreFences(output.join("\n\n"), tokens).replace(/\n{3,}/g, "\n\n").trim();
         }
 
         function cleanMarkdown(markdown) {
           const rebuilt = rebuildLanguageBlocks(markdown);
-          const rawLines = rebuilt.split(/\n/);
+          const { protectedText, tokens } = tokenizeFences(rebuilt);
+          const lines = protectedText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
           const output = [];
           const seen = new Set();
-          let inFence = false;
 
-          for (const raw of rawLines) {
-            const line = inFence ? raw.replace(/[ \t]+$/g, "") : raw.trim();
-            if (!line && !inFence) continue;
-            if (line.trim().startsWith("```")) {
-              inFence = !inFence;
-              output.push(line.trim());
-              continue;
-            }
-            if (inFence) {
+          for (const line of lines) {
+            if (/^@@CPDOWN_FENCE_\d+@@$/.test(line)) {
               output.push(line);
               continue;
             }
@@ -235,7 +215,8 @@
             seen.add(key);
             output.push(line);
           }
-          return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+
+          return restoreFences(output.join("\n\n"), tokens).replace(/\n{3,}/g, "\n\n").trim();
         }
 
         function useful(markdown) {
@@ -294,7 +275,7 @@
 
         const blocks = collectBlocks();
         if (!blocks.length) {
-          showPageToast("cpdown X.com alpha 4: no text blocks found", "error");
+          showPageToast("cpdown X.com alpha 5: no text blocks found", "error");
           return { ok: false, error: "No text blocks found" };
         }
 
@@ -302,10 +283,10 @@
         const markdown = [`# ${document.title || "X.com content"}`, "", `**Source:** ${location.href}`, author ? `**Author:** ${author}` : "", "", "---", "", blocks.join("\n\n")].filter(Boolean).join("\n");
 
         return copyMarkdown(markdown).then(() => {
-          showPageToast(`cpdown X.com alpha 4: copied ${blocks.length} block(s)`);
+          showPageToast(`cpdown X.com alpha 5: copied ${blocks.length} block(s)`);
           return { ok: true, blockCount: blocks.length };
         }).catch((error) => {
-          showPageToast(`cpdown X.com alpha 4: copy failed (${error.message})`, "error");
+          showPageToast(`cpdown X.com alpha 5: copy failed (${error.message})`, "error");
           return { ok: false, error: error.message };
         });
       }
