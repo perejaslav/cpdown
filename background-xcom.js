@@ -1,5 +1,5 @@
 (() => {
-  const MENU_ID = "cpdown-xcom-markdown-alpha";
+  const MENU_ID = "cpdown-xcom-markdown";
 
   function isXUrl(url) {
     try {
@@ -16,7 +16,7 @@
       chrome.runtime.lastError;
       chrome.contextMenus.create({
         id: MENU_ID,
-        title: "Copy X.com Markdown (alpha)",
+        title: "Copy X.com Markdown",
         contexts: ["page", "selection"],
         documentUrlPatterns: ["https://x.com/*", "https://twitter.com/*"]
       });
@@ -216,7 +216,7 @@
         }
 
         function showPageToast(message, type = "success") {
-          const id = "cpdown-xcom-alpha-toast";
+          const id = "cpdown-xcom-toast";
           document.getElementById(id)?.remove();
           const toast = document.createElement("div");
           toast.id = id;
@@ -249,7 +249,7 @@
 
         const blocks = collectBlocks();
         if (!blocks.length) {
-          showPageToast("cpdown X.com alpha 3: no text blocks found", "error");
+          showPageToast("cpdown X.com: no text blocks found", "error");
           return { ok: false, error: "No text blocks found" };
         }
 
@@ -266,10 +266,10 @@
         ].filter(Boolean).join("\n");
 
         return copyMarkdown(markdown).then(() => {
-          showPageToast(`cpdown X.com alpha 3: copied ${blocks.length} block(s)`);
+          showPageToast(`cpdown X.com: copied ${blocks.length} block(s)`);
           return { ok: true, blockCount: blocks.length };
         }).catch((error) => {
-          showPageToast(`cpdown X.com alpha 3: copy failed (${error.message})`, "error");
+          showPageToast(`cpdown X.com: copy failed (${error.message})`, "error");
           return { ok: false, error: error.message };
         });
       }
