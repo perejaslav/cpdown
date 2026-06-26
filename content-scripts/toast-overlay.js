@@ -17,7 +17,8 @@
       root = document.createElement('ol');
       root.id = 'cpdown-toast-root';
       root.setAttribute('data-sonner-toaster', '');
-      root.setAttribute('data-sonner-theme', 'light');
+      root.setAttribute('data-sonner-theme',
+        window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       root.setAttribute('data-x-position', 'right');
       root.setAttribute('data-y-position', 'top');
       root.setAttribute('dir', 'ltr');

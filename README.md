@@ -82,6 +82,14 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.7
+
+- **New:** Dark theme support — all UI surfaces now follow system `prefers-color-scheme`
+  - Sonner toast notifications on web pages respect system dark mode via `theme:"system"`
+  - YouTube transcript toast overlay detects system theme dynamically
+  - X.com context-menu toast uses adaptive colors (light/dark)
+- **Change:** Extension version updated to `1.7`
+
 ### v1.6
 
 - **New:** X.com / Twitter Markdown extraction
@@ -131,4 +139,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.6**
+**v1.7**

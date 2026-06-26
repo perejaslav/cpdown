@@ -218,13 +218,17 @@
         function showPageToast(message, type = "success") {
           const id = "cpdown-xcom-toast";
           document.getElementById(id)?.remove();
+          const isDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
           const toast = document.createElement("div");
           toast.id = id;
           toast.textContent = message;
+          const bg = type === "error"
+            ? (isDark ? "#7f1d1d" : "#dc2626")
+            : (isDark ? "#14532d" : "#16a34a");
           toast.style.cssText = [
             "position:fixed", "right:18px", "top:18px", "z-index:2147483647", "max-width:380px",
             "padding:12px 14px", "border-radius:10px", "font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif",
-            "box-shadow:0 8px 30px rgba(0,0,0,.22)", `background:${type === "error" ? "#7f1d1d" : "#14532d"}`, "color:#fff"
+            "box-shadow:0 8px 30px rgba(0,0,0,.22)", `background:${bg}`, "color:#fff"
           ].join(";");
           document.documentElement.appendChild(toast);
           setTimeout(() => toast.remove(), 4500);
