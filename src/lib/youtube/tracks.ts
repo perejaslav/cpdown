@@ -64,9 +64,9 @@ export function selectTrack(
   const firstManual = tracks.find((t) => t.kind === "manual");
   if (firstManual) return firstManual;
 
-  // 6. first ASR
-  const firstAsr = tracks.find((t) => t.kind === "asr");
-  if (firstAsr) return firstAsr;
+  // 6. first available (any kind)
+  const firstAny = tracks[0];
+  if (firstAny) return firstAny;
 
   // 7. null
   return null;

@@ -84,13 +84,43 @@ describe("selectTrack", () => {
     expect(selectTrack([], ["en"])).toBeNull();
   });
 
-  it("returns null when only unknown-kind tracks exist", () => {
+  it("falls back to first available when no manual and no ASR", () => {
     const tracks = [makeTrack("en", "unknown")];
-    expect(selectTrack(tracks, ["en"])).toBeNull();
+    expect(selectTrack(tracks, ["en"])).toBeTruthy();
+    expect(selectTrack(tracks, ["en"])?.languageCode).toBe("en");
   });
 
   it("checks multiple preferred languages", () => {
     const tracks = [makeTrack("ja", "manual"), makeTrack("en", "manual")];
     expect(selectTrack(tracks, ["ja", "en"])?.languageCode).toBe("ja");
+  });
+
+  it("handles ru-RU user language with only ru available (base match)", () => {
+    const tracks = [makeTrack("ru", "manual")];
+    expect(selectTrack(tracks, ["ru-RU"])?.languageCode).toBe("ru");
+  });
+
+  it("handles pt-BR user language with only pt available (base match)", () => {
+    const tracks = [makeTrack("pt", "asr")];
+    expect(selectTrack(tracks, ["pt-BR"])?.languageCode).toBe("pt");
+  });
+
+  it("handles zh-Hans user language with only zh available (base match)", () => {
+    const tracks = [makeTrack("zh", "manual")];
+    expect(selectTrack(tracks, ["zh-Hans"])?.languageCode).toBe("zh");
+  });
+
+  it("performs case-insensitive comparison", () => {
+    const tracks = [makeTrack("EN", "manual")];
+    expect(selectTrack(tracks, ["en"])?.languageCode).toBe("EN");
+  });
+
+  it("selects specific manual track over other manual tracks", () => {
+    const tracks = [
+      makeTrack("de", "manual"),
+      makeTrack("en", "manual"),
+      makeTrack("fr", "manual"),
+    ];
+    expect(selectTrack(tracks, ["en"])?.languageCode).toBe("en");
   });
 });
