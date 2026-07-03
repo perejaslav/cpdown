@@ -1,13 +1,14 @@
 /**
  * Isolated-world YouTube bridge client.
  * Listens to MAIN-world bridge messages, selects caption tracks, fetches timedtext.
+ *
+ * WXT entrypoint — all code with side effects lives inside main().
  */
 
 import { selectTrack } from "../src/lib/youtube/tracks";
-import { parsePotFromTimedTextUrl } from "../src/lib/youtube/pot";
 import { buildTimedtextUrl, parseSrt, estimateTokenCount } from "../src/lib/youtube/timedtext";
 import type { CaptionTrack } from "../src/lib/contracts";
-import { BRIDGE_CHANNEL, isValidBridgeMessage, matchesNavigation, matchesRequestId, matchesVideoId } from "../src/lib/youtube/bridge-protocol";
+import { BRIDGE_CHANNEL, isValidBridgeMessage, matchesNavigation } from "../src/lib/youtube/bridge-protocol";
 
 const TIMEOUT_MS = 8000;
 const RETRY_TIMEOUT_MS = 8000;
@@ -20,16 +21,21 @@ interface State {
   bridgeReady: boolean;
 }
 
+// Lazy state — actual navigation/video IDs set on first call
 let state: State = {
   channel: "",
-  navigationId: currentNavigation(),
-  videoId: currentVideoId(),
+  navigationId: "",
+  videoId: "",
   pot: null,
   bridgeReady: false,
 };
 
 function currentNavigation(): string {
-  return `${location.pathname}${location.search}${location.hash}`;
+  try {
+    return `${location.pathname}${location.search}${location.hash}`;
+  } catch {
+    return "";
+  }
 }
 
 function currentVideoId(): string {
@@ -38,10 +44,6 @@ function currentVideoId(): string {
   } catch {
     return "";
   }
-}
-
-function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 async function fetchTimedtext(url: string): Promise<{ ok: true; text: string } | { ok: false; code: string }> {
@@ -56,7 +58,7 @@ async function fetchTimedtext(url: string): Promise<{ ok: true; text: string } |
   }
 }
 
-async function waitForPlayerResponse(timeoutMs: number): Promise<boolean> {
+function waitForPlayerResponse(timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), timeoutMs);
 
@@ -98,7 +100,6 @@ async function waitForPlayerResponse(timeoutMs: number): Promise<boolean> {
         return;
       }
 
-      // Fetch timedtext
       const timedtextUrl = buildTimedtextUrl({ track: selected, pot: data.pot || state.pot });
       fetchTimedtext(timedtextUrl).then((result) => {
         if (!result.ok) {
@@ -120,8 +121,6 @@ async function waitForPlayerResponse(timeoutMs: number): Promise<boolean> {
         });
         resolve(true);
       });
-
-      resolve(true);
     };
 
     window.addEventListener("message", handler);
@@ -149,30 +148,20 @@ function listenForBridgeReady(): Promise<void> {
 
     window.addEventListener("message", handler);
 
-    // Timeout — resolve anyway, bridge might already have data
     setTimeout(() => resolve(), 3000);
   });
 }
 
 export async function extractTranscript(): Promise<void> {
-  const nav = currentNavigation();
-  const vid = currentVideoId();
-
-  if (state.navigationId !== nav) {
-    // SPA navigation — reset state
-    state.navigationId = nav;
-    state.videoId = vid;
-    state.bridgeReady = false;
-  }
-
-  state.videoId = vid;
+  // Initialize state from actual page (lazy — safe after main() starts)
+  state.navigationId = currentNavigation();
+  state.videoId = currentVideoId();
 
   await listenForBridgeReady();
 
   const success = await waitForPlayerResponse(TIMEOUT_MS);
 
   if (!success) {
-    // One retry after SPA navigation update
     state.navigationId = currentNavigation();
     state.videoId = currentVideoId();
     const retrySuccess = await waitForPlayerResponse(RETRY_TIMEOUT_MS);
@@ -186,15 +175,20 @@ export async function extractTranscript(): Promise<void> {
   }
 }
 
-// Listen for extraction trigger
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "EXTRACT_YOUTUBE_TRANSCRIPT") {
-    extractTranscript().catch((err) => {
-      chrome.runtime.sendMessage({
-        type: "TRANSCRIPT_RESULT",
-        payload: { error: "Internal error", diagnosticCode: "YOUTUBE_BRIDGE_INVALID_MESSAGE" },
-      });
+// WXT content script entrypoint
+export default defineContentScript({
+  matches: ["*://*.youtube.com/*", "*://youtu.be/*"],
+  main() {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (msg.type === "EXTRACT_YOUTUBE_TRANSCRIPT") {
+        extractTranscript().catch(() => {
+          chrome.runtime.sendMessage({
+            type: "TRANSCRIPT_RESULT",
+            payload: { error: null, diagnosticCode: "YOUTUBE_BRIDGE_INVALID_MESSAGE" },
+          });
+        });
+        sendResponse({ ok: true });
+      }
     });
-    sendResponse({ ok: true });
-  }
+  },
 });
