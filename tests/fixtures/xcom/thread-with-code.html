@@ -1,0 +1,32 @@
+<div id="root">
+  <main>
+    <article data-testid="tweet">
+      <div data-testid="tweetText">
+        <p>Thread starter: here's a useful Python snippet for API calls.</p>
+        <pre><code class="language-python">import requests
+
+def fetch_data(url):
+    response = requests.get(url)
+    return response.json()</code></pre>
+        <p>Works great for simple GET requests.</p>
+      </div>
+    </article>
+    <article data-testid="tweet">
+      <div data-testid="tweetText">
+        <p>Follow-up: you can also add headers for authentication.</p>
+        <pre><code class="language-python">headers = {"Authorization": "Bearer token"}
+data = fetch_data("https://api.example.com", headers=headers)</code></pre>
+      </div>
+    </article>
+    <article data-testid="tweet">
+      <div data-testid="tweetText">
+        <p>like</p>
+      </div>
+    </article>
+    <article data-testid="tweet">
+      <div data-testid="tweetText">
+        <p>Final note: always handle errors gracefully.</p>
+      </div>
+    </article>
+  </main>
+</div>
