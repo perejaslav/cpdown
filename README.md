@@ -82,6 +82,17 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.8
+
+- **Architecture:** Source tree restored under WXT — reproducible builds, `pnpm check` pipeline
+- **New:** 228 unit and integration tests across 17 test files, covering core extraction logic
+- **New:** X.com ordered thread extraction — preserves DOM order, no top-N truncation
+- **New:** X.com heuristic code detection — language markers + strong indicator chains
+- **Fix:** YouTube transcript extraction no longer toggles CC state in the player
+- **Fix:** YouTube caption track selection — picks best match from `navigator.languages`
+- **Fix:** X.com `---` separators between posts, UI-line noise filtered
+- **Change:** Extension version updated to `1.8`
+
 ### v1.7
 
 - **New:** Dark theme support — all UI surfaces now follow system `prefers-color-scheme`
@@ -139,4 +150,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.7**
+**v1.8**
