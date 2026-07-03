@@ -25,10 +25,18 @@ export function buildXcomMarkdown(input: XcomRenderInput): string {
   sections.push("");
   sections.push("---");
 
-  // Posts
+  // Posts — separate consecutive posts with ---
+  const renderedPosts: string[] = [];
   for (const post of posts) {
     const rendered = renderPost(post);
-    if (rendered) sections.push(rendered);
+    if (rendered) renderedPosts.push(rendered);
+  }
+
+  for (let i = 0; i < renderedPosts.length; i++) {
+    sections.push(renderedPosts[i]);
+    if (i < renderedPosts.length - 1) {
+      sections.push("---");
+    }
   }
 
   return sections.join("\n\n");

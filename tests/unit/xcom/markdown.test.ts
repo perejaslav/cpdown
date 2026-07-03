@@ -76,8 +76,12 @@ describe("buildXcomMarkdown", () => {
         [{ type: "text", text: "Post two" }],
       ],
     });
-    expect(md).toContain("---");
-    expect(md.indexOf("Post one")).toBeLessThan(md.indexOf("Post two"));
+    const postOneIdx = md.indexOf("Post one");
+    const postTwoIdx = md.indexOf("Post two");
+    const separatorIdx = md.indexOf("---", postOneIdx + "Post one".length);
+    // --- appears between the two posts
+    expect(separatorIdx).toBeGreaterThan(postOneIdx);
+    expect(separatorIdx).toBeLessThan(postTwoIdx);
   });
 
   it("does not create empty sections for empty posts", () => {
