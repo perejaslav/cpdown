@@ -7,5 +7,6 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     // DOM tests opt in via file pattern or // @vitest-environment jsdom annotation
     environmentMatchGlob: ["tests/dom/**/*.test.ts"],
+    passWithNoTests: true,
   },
 });

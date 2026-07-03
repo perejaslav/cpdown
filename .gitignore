@@ -13,6 +13,10 @@ node_modules/
 .temp/
 .tmp/
 
+# WXT build artifacts
+.output/
+.wxt/
+
 # Logs
 *.log
 npm-debug.log*

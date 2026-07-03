@@ -17,6 +17,7 @@
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.2",
     "@types/node": "^22.0.0",
     "jsdom": "^29.1.1",
     "typescript": "^5.0.0",
