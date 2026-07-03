@@ -5,6 +5,7 @@
  */
 
 import type { XcomSegment } from "../../lib/xcom/segments";
+import { detectCodeBlock } from "../../lib/xcom/code-detect";
 import { isUiLine, normalizeSpaces } from "../../lib/xcom/ui-patterns";
 
 const SELECTORS =
@@ -63,7 +64,11 @@ export function collectXcomPosts(doc: Document): XcomSegment[][] {
   }
 
   // Steps 4–7: Extract segments from each post, left-to-right, filter empties
-  return collected.map(extractSegments).filter((s) => s.length > 0);
+  // Step 8: Apply heuristic code detection to text-only segments
+  return collected
+    .map(extractSegments)
+    .map(applyHeuristicCodeDetection)
+    .filter((s) => s.length > 0);
 }
 
 function extractSegments(root: Element): XcomSegment[] {
@@ -136,4 +141,61 @@ function extractCodeLanguage(el: Element): string {
   const cls = (el.getAttribute("class") ?? "").toLowerCase();
   const match = cls.match(/language-([a-z0-9+#-]+)/);
   return match ? match[1] : "";
+}
+
+/**
+ * Post-process a post's segments: group consecutive text segments,
+ * run heuristic code detection, and replace matched groups with
+ * a single code segment.
+ *
+ * Non-text segments (code, link) are never scanned — only text is.
+ * DOM order is preserved; code is never moved.
+ */
+function applyHeuristicCodeDetection(segments: XcomSegment[]): XcomSegment[] {
+  const result: XcomSegment[] = [];
+  let textBuffer: string[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+
+    if (seg.type === "text") {
+      textBuffer.push(seg.text);
+    } else {
+      // Flush text buffer — check for heuristic code
+      if (textBuffer.length > 0) {
+        result.push(...flushTextBuffer(textBuffer));
+        textBuffer = [];
+      }
+      // Non-text segments pass through as-is
+      result.push(seg);
+    }
+  }
+
+  // Flush remaining buffer
+  if (textBuffer.length > 0) {
+    result.push(...flushTextBuffer(textBuffer));
+  }
+
+  return result;
+}
+
+/**
+ * Try heuristic code detection on a group of consecutive text lines.
+ * Returns either a single code segment or the original text segments.
+ */
+function flushTextBuffer(lines: string[]): XcomSegment[] {
+  const detection = detectCodeBlock(lines);
+
+  if (detection.isCode) {
+    return [
+      {
+        type: "code",
+        code: lines.join("\n"),
+        lang: detection.lang,
+      },
+    ];
+  }
+
+  // Not code — return as text segments
+  return lines.map((text) => ({ type: "text" as const, text }));
 }
