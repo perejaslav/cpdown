@@ -198,4 +198,77 @@ describe("detectCodeBlock", () => {
     // Only 2 strong lines — not enough
     expect(result.isCode).toBe(false);
   });
+
+  it("Path A: strips language marker from content (python)", () => {
+    const lines = ["python", "import os", "print(os.getcwd())"];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.lang).toBe("python");
+    expect(result.skipFirstLine).toBe(true);
+  });
+
+  it("Path A: strips language marker from content (bash)", () => {
+    const lines = ["bash", "cd /tmp", "echo hi"];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.lang).toBe("bash");
+    expect(result.skipFirstLine).toBe(true);
+  });
+
+  it("Path A: strips language marker from content (json)", () => {
+    const lines = ["json", '{"a": 1}', '{"b": 2}'];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.lang).toBe("json");
+    expect(result.skipFirstLine).toBe(true);
+  });
+
+  it("Path A: strips language marker from content (yaml)", () => {
+    const lines = ["yaml", "name: test", "value: 123"];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.lang).toBe("yaml");
+    expect(result.skipFirstLine).toBe(true);
+  });
+
+  it("Path A: normalizes js → javascript and strips marker", () => {
+    const lines = ["js", "const x = 1", "console.log(x)"];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.lang).toBe("javascript");
+    expect(result.skipFirstLine).toBe(true);
+  });
+
+  it("Path A: normalizes yml → yaml and strips marker", () => {
+    const lines = ["yml", "name: test", "value: 123"];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.lang).toBe("yaml");
+    expect(result.skipFirstLine).toBe(true);
+  });
+
+  it("Path A: normalizes sh → bash and strips marker", () => {
+    const lines = ["sh", "cd /tmp", "echo done"];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.lang).toBe("bash");
+    expect(result.skipFirstLine).toBe(true);
+  });
+
+  it("Path A: mark line 'python' inside real code (not first line) is preserved", () => {
+    const lines = ["import sys", "python", "print(sys.version)"];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(false);
+  });
+
+  it("Path B does NOT skip first line", () => {
+    const lines = [
+      "import requests",
+      "def fetch(url):",
+      "    return requests.get(url)",
+    ];
+    const result = detectCodeBlock(lines);
+    expect(result.isCode).toBe(true);
+    expect(result.skipFirstLine).toBe(false);
+  });
 });

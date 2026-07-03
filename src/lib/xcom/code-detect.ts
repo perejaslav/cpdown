@@ -97,8 +97,9 @@ function looksLikeCodeLineInContext(line: string): boolean {
 export function detectCodeBlock(lines: string[]): {
   isCode: boolean;
   lang: string;
+  skipFirstLine: boolean;
 } {
-  if (lines.length === 0) return { isCode: false, lang: "" };
+  if (lines.length === 0) return { isCode: false, lang: "", skipFirstLine: false };
 
   // Path A: language marker + 2+ following lines
   const marker = detectLanguageMarker(lines[0]);
@@ -107,7 +108,7 @@ export function detectCodeBlock(lines: string[]): {
       .slice(1)
       .filter((l) => looksLikeCodeLineInContext(l));
     if (followingCodeLines.length >= 2) {
-      return { isCode: true, lang: marker };
+      return { isCode: true, lang: marker, skipFirstLine: true };
     }
   }
 
@@ -117,9 +118,9 @@ export function detectCodeBlock(lines: string[]): {
       STRONG_CODE_PATTERN.test(l.trim()),
     ).length;
     if (strongCount >= 3) {
-      return { isCode: true, lang: "" };
+      return { isCode: true, lang: "", skipFirstLine: false };
     }
   }
 
-  return { isCode: false, lang: "" };
+  return { isCode: false, lang: "", skipFirstLine: false };
 }

@@ -187,10 +187,11 @@ function flushTextBuffer(lines: string[]): XcomSegment[] {
   const detection = detectCodeBlock(lines);
 
   if (detection.isCode) {
+    const linesToKeep = detection.skipFirstLine ? lines.slice(1) : lines;
     return [
       {
         type: "code",
-        code: lines.join("\n"),
+        code: linesToKeep.join("\n"),
         lang: detection.lang,
       },
     ];

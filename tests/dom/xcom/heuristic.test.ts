@@ -29,6 +29,7 @@ describe("heuristic code detection in DOM adapter", () => {
     if (codeSeg!.type === "code") {
       expect(codeSeg!.lang).toBe("python");
       expect(codeSeg!.code).toContain("import os");
+      expect(codeSeg!.code).not.toContain("python"); // marker stripped from code
     }
   });
 
@@ -54,7 +55,7 @@ describe("heuristic code detection in DOM adapter", () => {
     expect(codeSeg).toBeDefined();
   });
 
-  it("preserves DOM order: text groups are independent", () => {
+  it("preserves DOM order: text groups are independent and marker stripped", () => {
     // Text segments between non-text elements form separate groups.
     // Each group is checked independently, DOM order is preserved.
     const doc = new DOMParser().parseFromString(
@@ -80,6 +81,10 @@ describe("heuristic code detection in DOM adapter", () => {
     // link, code (from heuristic), link — DOM order preserved
     expect(segs[0].type).toBe("link");
     expect(segs[1].type).toBe("code");
+    if (segs[1].type === "code") {
+      expect(segs[1].code).not.toContain("python"); // marker NOT in code
+      expect(segs[1].code).toContain("import os");   // code IS in code
+    }
     expect(segs[2].type).toBe("link");
   });
 
