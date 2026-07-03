@@ -26,6 +26,24 @@ describe("isValidBridgeMessage", () => {
   it("rejects message missing navigationId", () => {
     expect(isValidBridgeMessage({ channel: BRIDGE_CHANNEL, type: "BRIDGE_READY" })).toBe(false);
   });
+
+  it("rejects message with wrong requestId (tested via matchesRequestId)", () => {
+    const msg = { channel: BRIDGE_CHANNEL, type: "PLAYER_RESPONSE" as const, navigationId: "nav", requestId: "r1" };
+    expect(matchesRequestId(msg, "r2")).toBe(false);
+    expect(matchesRequestId(msg, "r1")).toBe(true);
+  });
+
+  it("rejects message from different videoId (tested via matchesVideoId)", () => {
+    const msg = { channel: BRIDGE_CHANNEL, type: "PLAYER_RESPONSE" as const, navigationId: "nav", videoId: "abc" };
+    expect(matchesVideoId(msg, "xyz")).toBe(false);
+    expect(matchesVideoId(msg, "abc")).toBe(true);
+  });
+
+  it("rejects old navigationId (tested via matchesNavigation)", () => {
+    const msg = { channel: BRIDGE_CHANNEL, type: "PLAYER_RESPONSE" as const, navigationId: "/watch?v=old" };
+    expect(matchesNavigation(msg, "/watch?v=new")).toBe(false);
+    expect(matchesNavigation(msg, "/watch?v=old")).toBe(true);
+  });
 });
 
 describe("matchesNavigation", () => {
