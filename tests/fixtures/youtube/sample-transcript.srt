@@ -1,0 +1,22 @@
+1
+00:00:01,000 --> 00:00:04,000
+Welcome to this video.
+
+2
+00:00:05,000 --> 00:00:09,500
+Today we'll learn about caption formats.
+
+3
+00:00:10,000 --> 00:00:15,000
+YouTube's timedtext API returns SRT format
+when called with fmt=srt parameter.
+
+4
+00:00:16,000 --> 00:00:20,000
+The SRT format includes sequence numbers,
+timestamps, and text lines.
+
+5
+00:00:21,000 --> 00:00:25,500
+We strip numbers and timestamps
+to get clean plain text.

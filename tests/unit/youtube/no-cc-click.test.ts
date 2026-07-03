@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("No CC-click guarantee (static analysis)", () => {
-  const entrypointPath = resolve(__dirname, "../../../entrypoints/youtube-main.world.ts");
+  const entrypointPath = resolve(__dirname, "../../../entrypoints/youtube-main.content.ts");
 
   it("does not contain .click() calls", () => {
     const content = readFileSync(entrypointPath, "utf-8");
@@ -29,7 +29,7 @@ describe("No CC-click guarantee (static analysis)", () => {
 });
 
 describe("Bridge client — no CC-click", () => {
-  const clientPath = resolve(__dirname, "../../../entrypoints/youtube-bridge.client.ts");
+  const clientPath = resolve(__dirname, "../../../entrypoints/youtube-bridge.content.ts");
 
   it("does not contain .click() calls", () => {
     const content = readFileSync(clientPath, "utf-8");

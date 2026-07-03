@@ -89,7 +89,7 @@
 
 1. **Not wired to background yet** (Phase H) — the new bridge client listens for `EXTRACT_YOUTUBE_TRANSCRIPT` messages but the toolbar/context-menu handlers haven't been updated to send them
 2. **`world: "MAIN"** content script approach works in WXT build but needs Chrome testing to confirm CSP compatibility
-3. **pot capture** via XHR `open` override may miss some timedtext requests if YouTube switches to `fetch` exclusively (both fetch and XHR are intercepted)
+3. (Removed — both fetch and XHR are intercepted)
 4. **SRT parsing** assumes standard YouTube SRT format — custom formats may produce different results
 
 ## Manual test instructions

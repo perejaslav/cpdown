@@ -1,5 +1,13 @@
 /**
  * Pure logic for timedtext URL construction and SRT parsing.
+ *
+ * YouTube's timedtext API returns SRT (SubRip) format when called
+ * with `&fmt=srt&c=WEB`. The SRT format uses sequence numbers and
+ * timestamp markers (-->) which this parser strips to extract
+ * clean plain text.
+ *
+ * Alternative formats (json3, srv3, vtt) are not supported.
+ *
  * ZERO runtime dependencies.
  */
 

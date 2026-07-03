@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { buildTimedtextUrl, parseSrt, estimateTokenCount } from "../../../src/lib/youtube/timedtext";
 
 describe("buildTimedtextUrl", () => {
@@ -46,6 +48,16 @@ describe("parseSrt", () => {
     const result = parseSrt(srt);
     expect(result.indexOf("First")).toBeLessThan(result.indexOf("Second"));
     expect(result.indexOf("Second")).toBeLessThan(result.indexOf("Third"));
+  });
+
+  it("parses a real SRT fixture correctly", () => {
+    const srt = readFileSync(resolve(__dirname, "../../fixtures/youtube/sample-transcript.srt"), "utf-8");
+    const result = parseSrt(srt);
+    expect(result).toContain("Welcome to this video.");
+    expect(result).toContain("caption formats");
+    expect(result).toContain("clean plain text");
+    expect(result).not.toContain("-->");
+    expect(result).not.toMatch(/^\d+$/m);
   });
 });
 
