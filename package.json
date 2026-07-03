@@ -17,9 +17,10 @@
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "wxt": "^0.18.0",
+    "@types/node": "^22.0.0",
+    "jsdom": "^29.1.1",
     "typescript": "^5.0.0",
     "vitest": "^1.6.0",
-    "@types/node": "^22.0.0"
+    "wxt": "^0.18.0"
   }
 }
