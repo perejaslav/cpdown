@@ -5,6 +5,7 @@
 
 import { selectTrack } from "../src/lib/youtube/tracks";
 import { parsePotFromTimedTextUrl } from "../src/lib/youtube/pot";
+import { buildTimedtextUrl, parseSrt, estimateTokenCount } from "../src/lib/youtube/timedtext";
 import type { CaptionTrack } from "../src/lib/contracts";
 import { BRIDGE_CHANNEL, isValidBridgeMessage, matchesNavigation, matchesRequestId, matchesVideoId } from "../src/lib/youtube/bridge-protocol";
 
@@ -41,23 +42,6 @@ function currentVideoId(): string {
 
 function generateRequestId(): string {
   return `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function parseSrt(text: string): string {
-  const lines = text.split("\n");
-  const textLines: string[] = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || /^\d+$/.test(trimmed) || trimmed.includes("-->")) continue;
-    textLines.push(trimmed);
-  }
-  return textLines.join("\n");
-}
-
-function extractTimedTextUrl(track: CaptionTrack, pot: string | null): string {
-  let url = track.baseUrl + "&fmt=srt&c=WEB";
-  if (pot) url += "&pot=" + encodeURIComponent(pot);
-  return url;
 }
 
 async function fetchTimedtext(url: string): Promise<{ ok: true; text: string } | { ok: false; code: string }> {
@@ -115,7 +99,7 @@ async function waitForPlayerResponse(timeoutMs: number): Promise<boolean> {
       }
 
       // Fetch timedtext
-      const timedtextUrl = extractTimedTextUrl(selected, data.pot || state.pot);
+      const timedtextUrl = buildTimedtextUrl({ track: selected, pot: data.pot || state.pot });
       fetchTimedtext(timedtextUrl).then((result) => {
         if (!result.ok) {
           chrome.runtime.sendMessage({
@@ -128,7 +112,7 @@ async function waitForPlayerResponse(timeoutMs: number): Promise<boolean> {
 
         const plainText = parseSrt(result.text);
         const markdown = `# ${payload.videoId}\n\n${plainText}`;
-        const tokenCount = Math.ceil(markdown.length / 4);
+        const tokenCount = estimateTokenCount(markdown);
 
         chrome.runtime.sendMessage({
           type: "TRANSCRIPT_RESULT",
