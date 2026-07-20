@@ -5,11 +5,13 @@ import type { RequestedCaptionTrack } from '../extractors/youtube/caption-track-
 
 export interface TabsAdapter {
   create(properties: chrome.tabs.CreateProperties): Promise<chrome.tabs.Tab>;
+  update(tabId: number, properties: chrome.tabs.UpdateProperties): Promise<chrome.tabs.Tab>;
   remove(tabId: number): Promise<void>;
 }
 
 const defaultTabs: TabsAdapter = {
   create: (properties) => chrome.tabs.create(properties),
+  update: (tabId, properties) => chrome.tabs.update(tabId, properties),
   remove: (tabId) => chrome.tabs.remove(tabId),
 };
 
@@ -47,9 +49,15 @@ export class YouTubeWorkerTabRunner {
       const tab = await this.tabs.create({
         url: input.videoUrl,
         active: false,
-        muted: true,
       });
       if (typeof tab.id !== 'number') throw new Error('Не удалось получить ID временной вкладки');
+
+      try {
+        await this.tabs.update(tab.id, { muted: true });
+      } catch {
+        // Приглушение желательно, но его сбой не должен отменять извлечение.
+      }
+
       return await this.jobs.update(jobId, {
         workerTabId: tab.id,
         status: 'waiting-page',
@@ -64,7 +72,11 @@ export class YouTubeWorkerTabRunner {
     }
   }
 
-  async finish(jobId: string, status: 'completed' | 'failed' | 'cancelled' | 'timeout', error?: string): Promise<void> {
+  async finish(
+    jobId: string,
+    status: 'completed' | 'failed' | 'cancelled' | 'timeout',
+    error?: string,
+  ): Promise<void> {
     const job = await this.jobs.get(jobId);
     if (!job) return;
 
