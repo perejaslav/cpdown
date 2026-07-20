@@ -1,10 +1,16 @@
 import { normalizeYouTubeUrl } from '../extractors/youtube/youtube-url';
-import type { ExtractionResult } from '../core/result-types';
+import type { ExtractionError, ExtractionResult } from '../core/result-types';
 import { YouTubeJobManager } from './job-manager';
 import { YouTubeWorkerTabRunner } from './youtube-tab-runner';
 
 export const YOUTUBE_CONTEXT_MENU_ID = 'cpdown-transcript';
 export const YOUTUBE_JOB_TIMEOUT_MS = 30_000;
+
+interface WorkerExtractionResponse {
+  ok: boolean;
+  result?: ExtractionResult;
+  error?: ExtractionError;
+}
 
 export interface BackgroundControllerAdapters {
   sendMessage(tabId: number, message: unknown): Promise<unknown>;
@@ -49,11 +55,31 @@ export class YouTubeBackgroundController {
     if (!job || job.status !== 'waiting-page') return;
 
     await this.jobs.setStatus(job.jobId, 'extracting');
-    await this.adapters.sendMessage(workerTabId, {
-      type: 'CPDOWN_EXTRACT_YOUTUBE_PAGE',
-      jobId: job.jobId,
-      timestamp: Date.now(),
-    });
+
+    try {
+      const response = (await this.adapters.sendMessage(workerTabId, {
+        type: 'CPDOWN_EXTRACT_YOUTUBE_PAGE',
+        jobId: job.jobId,
+        timestamp: Date.now(),
+      })) as WorkerExtractionResponse | undefined;
+
+      if (response?.ok && response.result) {
+        await this.complete(job.jobId, response.result);
+        return;
+      }
+
+      await this.fail(
+        job.jobId,
+        response?.error?.code || 'YOUTUBE_EXTRACTION_FAILED',
+        response?.error?.message || 'Не удалось извлечь субтитры',
+      );
+    } catch (error) {
+      await this.fail(
+        job.jobId,
+        'YOUTUBE_WORKER_MESSAGE_FAILED',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   async complete(jobId: string, result: ExtractionResult): Promise<void> {
