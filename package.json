@@ -9,10 +9,12 @@
     "zip": "wxt zip",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ui": "vitest run tests/ui",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
+    "jsdom": "29.1.1",
     "typescript": "7.0.2",
     "vitest": "4.1.10",
     "wxt": "0.20.27"
