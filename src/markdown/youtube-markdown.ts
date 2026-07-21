@@ -1,5 +1,5 @@
 import type { ExtractionResult } from "../core/result-types";
-import { createMarkdownFileName } from "../services/filename";
+import { withMarkdownExtension } from "../services/filename";
 import { estimateTokens, countWords } from "../services/text-metrics";
 
 export interface YouTubeMarkdownInput {
@@ -41,7 +41,7 @@ export function buildYouTubeExtractionResult(input: YouTubeMarkdownInput): Extra
     title: input.title,
     sourceUrl: input.sourceUrl,
     markdown,
-    fileName: createMarkdownFileName(`${input.title} — YouTube`),
+    fileName: withMarkdownExtension(`${input.title} — YouTube`),
     wordCount: countWords(markdown),
     estimatedTokens: estimateTokens(markdown),
     warnings: input.warnings ?? [],
