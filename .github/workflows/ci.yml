@@ -26,10 +26,23 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        id: install
+        shell: bash
+        run: |
+          set -o pipefail
+          npm install --no-audit --no-fund --loglevel verbose 2>&1 | tee npm-install.log
+
+      - name: Upload install diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-install-log
+          path: npm-install.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Run unit and DOM tests
         run: npm test
