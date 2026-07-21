@@ -1,4 +1,3 @@
-import { defineContentScript } from 'wxt/sandbox';
 import { browser } from 'wxt/browser';
 import type { ExtractionError, ExtractionResult } from '../src/core/result-types';
 import { extractOpenYouTubePage } from '../src/extractors/youtube/open-page-extractor';
