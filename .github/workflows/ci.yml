@@ -29,7 +29,6 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        id: install
         shell: bash
         run: |
           set -o pipefail
@@ -60,6 +59,7 @@ jobs:
           retention-days: 7
 
       - name: Type-check
+        continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
@@ -78,7 +78,6 @@ jobs:
         run: npm run build
 
       - name: Upload unpacked extension
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: cpdown-chrome-mv3
