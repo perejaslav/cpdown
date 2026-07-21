@@ -7,7 +7,7 @@ import {
   type CaptionTrack,
   type RequestedCaptionTrack,
 } from "./caption-track-selector";
-import { assertFreshPlayerResponse, getPlayerVideoId } from "./player-response";
+import { assertFreshPlayerResponse, getPlayerResponseVideoId } from "./player-response";
 import { fetchTranscript, type TranscriptFetchOptions } from "./transcript-fetcher";
 import { normalizeTranscript } from "./transcript-normalizer";
 import { parseYouTubeUrl } from "./youtube-url";
@@ -46,7 +46,7 @@ export async function extractYouTube(
   assertFreshPlayerResponse(normalized.videoId, input.playerResponse);
 
   const details = input.playerResponse.videoDetails;
-  const actualVideoId = getPlayerVideoId(input.playerResponse);
+  const actualVideoId = getPlayerResponseVideoId(input.playerResponse);
   if (!actualVideoId) throw new Error("В данных проигрывателя отсутствует videoId");
 
   const tracks =
