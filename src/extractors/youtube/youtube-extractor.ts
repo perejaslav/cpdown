@@ -10,7 +10,7 @@ import {
 import { assertFreshPlayerResponse, getPlayerVideoId } from "./player-response";
 import { fetchTranscript, type TranscriptFetchOptions } from "./transcript-fetcher";
 import { normalizeTranscript } from "./transcript-normalizer";
-import { normalizeYouTubeUrl } from "./youtube-url";
+import { parseYouTubeUrl } from "./youtube-url";
 
 interface PlayerResponseLike {
   videoDetails?: {
@@ -40,7 +40,7 @@ export interface YouTubeExtractionInput {
 export async function extractYouTube(
   input: YouTubeExtractionInput,
 ): Promise<ExtractionResult> {
-  const normalized = normalizeYouTubeUrl(input.pageUrl);
+  const normalized = parseYouTubeUrl(input.pageUrl);
   if (!normalized) throw new Error("Неподдерживаемая ссылка YouTube");
 
   assertFreshPlayerResponse(normalized.videoId, input.playerResponse);
