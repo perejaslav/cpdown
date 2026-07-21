@@ -1,4 +1,3 @@
-import { defineContentScript } from 'wxt/sandbox';
 import type { ExtractionError, ExtractionResult } from '../src/core/result-types';
 import { showExtractionErrorToast, showExtractionResultToast } from '../src/ui/result-toast';
 
