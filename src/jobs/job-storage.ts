@@ -30,6 +30,19 @@ export async function writeYouTubeJobs(
   await storage.set({ [STORAGE_KEY]: jobs });
 }
 
+export async function listYouTubeJobs(
+  storage: SessionStorageArea = defaultStorage(),
+): Promise<BackgroundYouTubeJob[]> {
+  return Object.values(await readYouTubeJobs(storage));
+}
+
+export async function getYouTubeJob(
+  jobId: string,
+  storage: SessionStorageArea = defaultStorage(),
+): Promise<BackgroundYouTubeJob | null> {
+  return (await readYouTubeJobs(storage))[jobId] ?? null;
+}
+
 export async function putYouTubeJob(
   job: BackgroundYouTubeJob,
   storage: SessionStorageArea = defaultStorage(),
@@ -39,16 +52,16 @@ export async function putYouTubeJob(
   await writeYouTubeJobs(jobs, storage);
 }
 
+export const saveYouTubeJob = putYouTubeJob;
+
 export async function removeYouTubeJob(
   jobId: string,
   storage: SessionStorageArea = defaultStorage(),
-): Promise<BackgroundYouTubeJob | undefined> {
+): Promise<void> {
   const jobs = await readYouTubeJobs(storage);
-  const removed = jobs[jobId];
-  if (!removed) return undefined;
+  if (!(jobId in jobs)) return;
   delete jobs[jobId];
   await writeYouTubeJobs(jobs, storage);
-  return removed;
 }
 
 export async function updateYouTubeJob(
