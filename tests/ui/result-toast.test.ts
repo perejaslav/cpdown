@@ -3,11 +3,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtractionResult } from '../../src/core/result-types';
 
-const copyMarkdown = vi.fn().mockResolvedValue(undefined);
-const downloadMarkdownFile = vi.fn();
+const mocks = vi.hoisted(() => ({
+  copyMarkdown: vi.fn().mockResolvedValue(undefined),
+  downloadMarkdownFile: vi.fn(),
+}));
 
-vi.mock('../../src/ui/copy-markdown', () => ({ copyMarkdown }));
-vi.mock('../../src/ui/download-markdown', () => ({ downloadMarkdownFile }));
+vi.mock('../../src/ui/copy-markdown', () => ({ copyMarkdown: mocks.copyMarkdown }));
+vi.mock('../../src/ui/download-markdown', () => ({
+  downloadMarkdownFile: mocks.downloadMarkdownFile,
+}));
 
 import {
   showExtractionErrorToast,
@@ -40,8 +44,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  copyMarkdown.mockClear();
-  downloadMarkdownFile.mockClear();
+  mocks.copyMarkdown.mockClear();
+  mocks.downloadMarkdownFile.mockClear();
   document.documentElement.innerHTML = '<head></head><body></body>';
 });
 
@@ -62,11 +66,11 @@ describe('result toast', () => {
 
     findButton('Копировать').click();
     await Promise.resolve();
-    expect(copyMarkdown).toHaveBeenCalledWith(result.markdown);
+    expect(mocks.copyMarkdown).toHaveBeenCalledWith(result.markdown);
     expect(latestRoot?.textContent).toContain('Скопировано в буфер обмена');
 
     findButton('Сохранить .md').click();
-    expect(downloadMarkdownFile).toHaveBeenCalledWith(result.fileName, result.markdown);
+    expect(mocks.downloadMarkdownFile).toHaveBeenCalledWith(result.fileName, result.markdown);
     expect(latestRoot?.textContent).toContain('Сохранён файл Тестовое видео.md');
   });
 
