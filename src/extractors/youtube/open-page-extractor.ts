@@ -28,7 +28,7 @@ export async function extractOpenYouTubePage(
   return extract({
     jobId: input.jobId,
     pageUrl: input.pageUrl,
-    playerResponse: state.playerResponse,
+    playerResponse: state.playerResponse as YouTubeExtractionInput['playerResponse'],
     requestedTrack: state.selectedTrack
       ? {
           languageCode: state.selectedTrack.languageCode,
