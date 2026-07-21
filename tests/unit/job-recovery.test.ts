@@ -38,8 +38,8 @@ describe("YouTube job recovery", () => {
     const storage = memoryStorage();
     await writeYouTubeJobs(
       {
-        active: createJob("active", 1),
-        lost: createJob("lost", 2),
+        active: createJob("active", 1, "waiting-page", 20_000),
+        lost: createJob("lost", 2, "waiting-page", 20_000),
         expired: createJob("expired", 3, "waiting-page", 0),
         done: createJob("done", 4, "completed"),
       },
