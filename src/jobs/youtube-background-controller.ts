@@ -1,4 +1,4 @@
-import { normalizeYouTubeUrl } from '../extractors/youtube/youtube-url';
+import { parseYouTubeUrl } from '../extractors/youtube/youtube-url';
 import type { ExtractionError, ExtractionResult } from '../core/result-types';
 import { YouTubeJobManager } from './job-manager';
 import { YouTubeWorkerTabRunner } from './youtube-tab-runner';
@@ -34,7 +34,7 @@ export class YouTubeBackgroundController {
   ) {}
 
   async startFromLink(sourceTabId: number, sourceUrl: string, linkUrl: string): Promise<string> {
-    const normalized = normalizeYouTubeUrl(linkUrl);
+    const normalized = parseYouTubeUrl(linkUrl);
     if (!normalized) throw new Error('Неподдерживаемая ссылка YouTube');
 
     const job = await this.runner.start({
