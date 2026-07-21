@@ -1,4 +1,3 @@
-import { defineContentScript } from 'wxt/sandbox';
 import { installPlayerBridge } from '../src/extractors/youtube/player-bridge';
 
 export default defineContentScript({
