@@ -21,18 +21,36 @@ function createYouTubeMenu(): void {
   });
 }
 
+function recoverJobs(): Promise<unknown> {
+  return recoverYouTubeJobs({
+    tabs: {
+      async exists(tabId) {
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          return typeof tab?.id === 'number';
+        } catch {
+          return false;
+        }
+      },
+      async close(tabId) {
+        await chrome.tabs.remove(tabId);
+      },
+    },
+  });
+}
+
 export default defineBackground(() => {
   const controller = new YouTubeBackgroundController();
 
   chrome.runtime.onInstalled.addListener(createYouTubeMenu);
   chrome.runtime.onStartup.addListener(() => {
     createYouTubeMenu();
-    void recoverYouTubeJobs();
+    void recoverJobs();
   });
   createYouTubeMenu();
-  void recoverYouTubeJobs();
+  void recoverJobs();
 
-  chrome.contextMenus.onClicked.addListener((info, tab) => {
+  chrome.contextMenus.onClicked.addListener((info: any, tab: any) => {
     if (
       info.menuItemId !== YOUTUBE_CONTEXT_MENU_ID ||
       typeof tab?.id !== 'number' ||
@@ -44,7 +62,7 @@ export default defineBackground(() => {
     void controller
       .startFromLink(tab.id, info.pageUrl || tab.url || '', info.linkUrl)
       .catch((error) => {
-        void chrome.tabs.sendMessage(tab.id!, {
+        void chrome.tabs.sendMessage(tab.id, {
           type: 'CPDOWN_YOUTUBE_CONTEXT_ERROR',
           jobId: `youtube_start_${Date.now()}`,
           timestamp: Date.now(),
@@ -57,11 +75,11 @@ export default defineBackground(() => {
       });
   });
 
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  chrome.tabs.onUpdated.addListener((tabId: number, changeInfo: any) => {
     if (changeInfo.status === 'complete') void controller.handleWorkerReady(tabId);
   });
 
-  chrome.runtime.onMessage.addListener((message: unknown, sender) => {
+  chrome.runtime.onMessage.addListener((message: unknown, sender: any) => {
     if (!message || typeof message !== 'object') return;
     const record = message as Record<string, unknown>;
 
