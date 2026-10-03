@@ -81,7 +81,16 @@
       }
     }
 
-    // Method 2: the "Show transcript" panel API (does not need pot)
+    // Method 2: caption tracks from the Android app API (no pot needed)
+    if (!plainText && actualVideoId) {
+      try {
+        plainText = await fetchViaAndroidPlayer(actualVideoId);
+      } catch (e) {
+        log('android: failed: ' + (e && e.message));
+      }
+    }
+
+    // Method 3: the "Show transcript" panel API
     if (!plainText) {
       try {
         plainText = await fetchTranscriptPanel();
@@ -135,21 +144,23 @@
       log('transcript panel: video has no transcript button');
       return '';
     }
-    var html = document.documentElement.innerHTML;
-    var versionMatch = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/);
-    var keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
-    var clientVersion = versionMatch ? versionMatch[1] : '2.20250101.00.00';
-    var url = '/youtubei/v1/get_transcript?prettyPrint=false' + (keyMatch ? '&key=' + keyMatch[1] : '');
+    var cfg = readYtcfg();
+    var context = cfg.context || { client: { clientName: 'WEB', clientVersion: cfg.clientVersion || '2.20250101.00.00' } };
+    var headers = { 'Content-Type': 'application/json', 'X-Youtube-Client-Name': '1' };
+    if (context.client && context.client.clientVersion) headers['X-Youtube-Client-Version'] = context.client.clientVersion;
+    if (context.client && context.client.visitorData) headers['X-Goog-Visitor-Id'] = context.client.visitorData;
+    log('transcript panel: full context ' + (cfg.context ? 'yes' : 'no'));
+    var url = '/youtubei/v1/get_transcript?prettyPrint=false' + (cfg.apiKey ? '&key=' + cfg.apiKey : '');
     var response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        context: { client: { clientName: 'WEB', clientVersion: clientVersion } },
-        params: params
-      })
+      headers: headers,
+      body: JSON.stringify({ context: context, params: params })
     });
     log('transcript panel: HTTP ' + response.status);
-    if (!response.ok) return '';
+    if (!response.ok) {
+      try { log('transcript panel: ' + (await response.text()).replace(/\s+/g, ' ').slice(0, 200)); } catch (_) {}
+      return '';
+    }
     var data = await response.json();
     var segments = [];
     collect(data, function (node) {
@@ -162,6 +173,69 @@
     });
     log('transcript panel: ' + segments.length + ' segments');
     return segments.join('\n');
+  }
+
+  async function fetchViaAndroidPlayer(videoId) {
+    var cfg = readYtcfg();
+    var url = '/youtubei/v1/player?prettyPrint=false' + (cfg.apiKey ? '&key=' + cfg.apiKey : '');
+    var response = await fetch(url, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38', hl: 'en' } },
+        videoId: videoId
+      })
+    });
+    log('android: player HTTP ' + response.status);
+    if (!response.ok) return '';
+    var data = await response.json();
+    var tracks = data && data.captions && data.captions.playerCaptionsTracklistRenderer &&
+      data.captions.playerCaptionsTracklistRenderer.captionTracks;
+    log('android: caption tracks: ' + (tracks ? tracks.length : 0) +
+      (data && data.playabilityStatus ? ', status ' + data.playabilityStatus.status : ''));
+    if (!tracks || tracks.length === 0) return '';
+    var trackUrl = tracks[0].baseUrl.replace(/&fmt=[^&]*/, '');
+    var res = await fetch(trackUrl, { credentials: 'omit' });
+    var xml = await res.text();
+    log('android: timedtext HTTP ' + res.status + ', ' + xml.length + ' chars');
+    return xmlToText(xml);
+  }
+
+  // Parses YouTube timedtext XML (<text> in format 1, <p> in format 3).
+  function xmlToText(xml) {
+    if (!xml) return '';
+    var doc = new DOMParser().parseFromString(xml, 'text/xml');
+    var nodes = doc.querySelectorAll('text, p');
+    var lines = [];
+    for (var i = 0; i < nodes.length; i++) {
+      // Entities can be double-encoded (&amp;#39;), decode once more via HTML parsing
+      var raw = nodes[i].textContent || '';
+      var decoded = new DOMParser().parseFromString(raw, 'text/html').documentElement.textContent || '';
+      var line = decoded.replace(/\s+/g, ' ').trim();
+      if (line) lines.push(line);
+    }
+    return lines.join('\n');
+  }
+
+  function readYtcfg() {
+    var html = document.documentElement.innerHTML;
+    var keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
+    var versionMatch = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/);
+    var context = null;
+    var at = html.indexOf('"INNERTUBE_CONTEXT":');
+    if (at !== -1) {
+      var start = html.indexOf('{', at);
+      var end = findJsonEnd(html, start);
+      if (end !== -1) {
+        try { context = JSON.parse(html.slice(start, end + 1)); } catch (_) {}
+      }
+    }
+    return {
+      apiKey: keyMatch ? keyMatch[1] : '',
+      clientVersion: versionMatch ? versionMatch[1] : '',
+      context: context
+    };
   }
 
   // Reads a JSON object assigned in an inline <script> of the initially loaded page.
