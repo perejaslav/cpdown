@@ -29,6 +29,7 @@ var _cpdownPendingCtx=null,_cpdownWatchdog=null;
 function _cpdownLog(){try{console.log.apply(console,["[cpdown]"].concat([].slice.call(arguments)))}catch(e){}}
 function _cpdownSaveCtx(c){_cpdownPendingCtx=c;try{R.storage.session.set({cpdownPendingCtx:c})}catch(e){}}
 async function _cpdownTakeCtx(){var c=_cpdownPendingCtx;_cpdownPendingCtx=null;if(_cpdownWatchdog){clearTimeout(_cpdownWatchdog);_cpdownWatchdog=null}if(!c){try{var st=await R.storage.session.get("cpdownPendingCtx");c=st&&st.cpdownPendingCtx||null;if(c)_cpdownLog("ctx restored from storage.session")}catch(e){}}try{await R.storage.session.remove("cpdownPendingCtx")}catch(e){}return c}
+function _cpdownShowToast(tabId,payload){return R.scripting.executeScript({target:{tabId:tabId},files:["content-scripts/toast-overlay.js"]}).then(function(){return R.tabs.sendMessage(tabId,{type:"SHOW_TRANSCRIPT_TOAST",payload:payload})}).catch(function(e){console.error("[cpdown] toast err:",e)})}
 R.runtime.onMessage.addListener(function _cpdownOnMsg(a,b){
  if(a.type==="TRANSCRIPT_RESULT"){
   (async function(){
@@ -36,28 +37,21 @@ R.runtime.onMessage.addListener(function _cpdownOnMsg(a,b){
   var c=await _cpdownTakeCtx();
   if(!c){_cpdownLog("TRANSCRIPT_RESULT ignored: no pending request");return}
   if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(e){}
-  if(a.payload.error){_cpdownLog("error:",a.payload.error);O(a.payload.error,"error");return}
-  _cpdownLog("ok, chars:",(a.payload.markdown||"").length);
-  R.scripting.executeScript({target:{tabId:c.originalTabId},files:["content-scripts/toast-overlay.js"]}).then(function(){
-   R.tabs.sendMessage(c.originalTabId,{type:"SHOW_TRANSCRIPT_TOAST",payload:a.payload}).catch(function(e){
-    console.error("toast err:",e);O("Failed to show transcript toast","error")
-   })
-  }).catch(function(e){
-   console.error("inject err:",e);O("Failed to show transcript toast","error")
-  })
+  if(a.payload.error)_cpdownLog("error:",a.payload.error);else _cpdownLog("ok, chars:",(a.payload.markdown||"").length);
+  _cpdownShowToast(c.originalTabId,a.payload);
   })();
  }
 });
 try{R.contextMenus.remove("cpdown-transcript",function(){void R.runtime.lastError;R.contextMenus.create({id:"cpdown-transcript",title:"Copy subtitles",contexts:["link"],targetUrlPatterns:["*://*.youtube.com/*","*://youtu.be/*"]},function(){void R.runtime.lastError})})}catch(e){try{R.contextMenus.create({id:"cpdown-transcript",title:"Copy subtitles",contexts:["link"],targetUrlPatterns:["*://*.youtube.com/*","*://youtu.be/*"]},function(){void R.runtime.lastError})}catch(_){}}
 R.contextMenus.onClicked.addListener(async function(a,b){
  try{
-  var c=a.linkUrl;if(!c){O("No URL found","error");return}
-  var u=new URL(c),d=u.searchParams.get("v");if(!d&&u.hostname==="youtu.be"){d=u.pathname.slice(1).split("/")[0]};if(!d){O("Not a YouTube video link","error");return}
+  var c=a.linkUrl;if(!c){_cpdownShowToast(b.id,{error:"No URL found"});return}
+  var u=new URL(c),d=u.searchParams.get("v");if(!d&&u.hostname==="youtu.be"){d=u.pathname.slice(1).split("/")[0]};if(!d){_cpdownShowToast(b.id,{error:"Not a YouTube video link"});return}
   var e=await R.tabs.create({url:c,active:false});
   _cpdownLog("open hidden tab for",d);
   _cpdownSaveCtx({originalTabId:b.id,hiddenTabId:e.id});
   if(_cpdownWatchdog)clearTimeout(_cpdownWatchdog);
-  _cpdownWatchdog=setTimeout(async function(){var c=await _cpdownTakeCtx();if(!c)return;_cpdownLog("watchdog: no result in 25s");if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(x){}O("YouTube did not respond in time. Please try again.","error")},25000);
+  _cpdownWatchdog=setTimeout(async function(){var c=await _cpdownTakeCtx();if(!c)return;_cpdownLog("watchdog: no result in 25s");if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(x){}_cpdownShowToast(c.originalTabId,{error:"YouTube did not respond in time (25s). Please try again."})},25000);
   await new Promise(function(f,g){
    var h=setTimeout(function(){R.tabs.onUpdated.removeListener(i);g(new Error("Timeout"))},15000);
    function i(j,k){if(j===e.id&&k.status==="complete"){R.tabs.onUpdated.removeListener(i);clearTimeout(h);f()}}
@@ -66,7 +60,7 @@ R.contextMenus.onClicked.addListener(async function(a,b){
   await new Promise(function(f){setTimeout(f,1000)});
   _cpdownLog("tab loaded, injecting yt-transcript.js");
   await R.scripting.executeScript({target:{tabId:e.id},files:["content-scripts/yt-transcript.js"]})
- }catch(f){await _cpdownTakeCtx();console.error("ctx err:",f);O("Failed: "+(f.message||f),"error")}
+ }catch(f){var g=await _cpdownTakeCtx();console.error("[cpdown] ctx err:",f);if(g&&g.hiddenTabId)try{R.tabs.remove(g.hiddenTabId)}catch(x){}_cpdownShowToast(b.id,{error:"Failed: "+(f.message||f)})}
 });
 
 function Ht(){}function H(a,...o){}const Ct={debug:(...a)=>H(console.debug,...a),log:(...a)=>H(console.log,...a),warn:(...a)=>H(console.warn,...a),error:(...a)=>H(console.error,...a)};let $;try{$=St.main(),$ instanceof Promise&&console.warn("The background's main() function return a promise, but it must be synchronous")}catch(a){throw Ct.error("The background crashed on startup!"),a}return $}();

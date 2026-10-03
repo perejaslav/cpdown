@@ -3,6 +3,7 @@
   window.__cpdownToastInjected = true;
 
   function showOverlay(payload) {
+    var isError = !!payload.error;
     var markdown = payload.markdown;
     var title = payload.title || 'YouTube Video';
     var tokenCount = payload.tokenCount || Math.ceil((markdown || '').length / 4);
@@ -33,7 +34,7 @@
     var toast = document.createElement('li');
     toast.setAttribute('data-sonner-toast', '');
     toast.setAttribute('data-rich-colors', 'true');
-    toast.setAttribute('data-type', 'success');
+    toast.setAttribute('data-type', isError ? 'error' : 'success');
     toast.setAttribute('data-styled', 'true');
     toast.setAttribute('data-mounted', 'true');
     toast.setAttribute('data-promise', 'false');
@@ -59,7 +60,13 @@
 
     var titleEl = document.createElement('div');
     titleEl.setAttribute('data-title', '');
-    titleEl.textContent = 'Transcript ready: ' + title + ' (' + tokenCount.toLocaleString() + ' tokens)';
+    titleEl.textContent = isError
+      ? 'cpdown: ' + payload.error
+      : 'Transcript ready: ' + title + ' (' + tokenCount.toLocaleString() + ' tokens)';
+    if (isError) {
+      icon.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    }
 
     content.appendChild(titleEl);
 
@@ -109,8 +116,22 @@
     // --- assemble in Sonner order: icon, content, buttons, close ---
     toast.appendChild(icon);
     toast.appendChild(content);
-    toast.appendChild(copyBtn);
-    toast.appendChild(saveBtn);
+    if (isError) {
+      // "Copy log" puts the error and the step log into the clipboard for a bug report
+      copyBtn.textContent = 'Copy log';
+      copyBtn.onclick = function () {
+        var log = 'cpdown error: ' + payload.error + '\n' + (payload.debug || []).join('\n');
+        navigator.clipboard.writeText(log).then(function () {
+          copyBtn.textContent = 'Copied!';
+        }).catch(function () {
+          copyBtn.textContent = 'Failed';
+        });
+      };
+      toast.appendChild(copyBtn);
+    } else {
+      toast.appendChild(copyBtn);
+      toast.appendChild(saveBtn);
+    }
     toast.appendChild(closeBtn);
     root.appendChild(toast);
 
@@ -122,7 +143,7 @@
     });
 
     // Auto-dismiss after 15 s
-    var autoTimer = setTimeout(function () { closeToast(toast); }, 15000);
+    var autoTimer = setTimeout(function () { closeToast(toast); }, isError ? 60000 : 15000);
     toast._autoTimer = autoTimer;
   }
 
