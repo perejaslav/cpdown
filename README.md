@@ -82,6 +82,13 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.8.1
+
+- **Fix:** Right-click "Copy subtitles" copied only the video title — captions are now fetched via the Android player API when the web request returns empty, with the transcript panel API as a last resort
+- **Fix:** Picks captions in the original audio language (auto-dubbed videos have several auto-generated tracks)
+- **Fix:** Errors are shown in the page overlay with a "Copy log" button instead of failing silently
+- **Fix:** Retry script injection when YouTube replaces the page in the background tab
+
 ### v1.7
 
 - **New:** Dark theme support — all UI surfaces now follow system `prefers-color-scheme`
@@ -139,4 +146,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.7**
+**v1.8.1**
