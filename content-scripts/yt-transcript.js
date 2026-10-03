@@ -4,7 +4,7 @@
 
     // Try 1: maybe youtube-main-world.js is already loaded (most common case)
     try {
-      playerData = await getPlayerData(6000);
+      playerData = await getPlayerData(3000);
     } catch (firstErr) {
       // Try 2: inject youtube-main-world.js ourselves and retry
       await new Promise(function (resolve) {
@@ -56,27 +56,22 @@
 
     const track = captionTracks[0];
     const baseUrl = track.baseUrl;
+    const srtUrl = baseUrl + '&fmt=srt&c=WEB' + (pot ? '&pot=' + pot : '');
 
-    var plainText = await fetchSubtitles(baseUrl, pot);
+    const response = await fetch(srtUrl);
+    const srtText = await response.text();
 
-    // YouTube returns an empty body when the "pot" token is missing/stale.
-    // Ask the main world script again (it toggles captions to capture a fresh token).
-    if (!plainText) {
-      try {
-        var retryData = await getPlayerData(6000);
-        if (retryData && retryData.pot) {
-          plainText = await fetchSubtitles(baseUrl, retryData.pot);
-        }
-      } catch (_) {}
+    const lines = srtText.split('\n');
+    const textLines = [];
+    for (var i = 0; i < lines.length; i++) {
+      var trimmed = lines[i].trim();
+      if (!trimmed || /^\d+$/.test(trimmed) || trimmed.indexOf('-->') !== -1) {
+        continue;
+      }
+      textLines.push(trimmed);
     }
 
-    if (!plainText) {
-      chrome.runtime.sendMessage({
-        type: 'TRANSCRIPT_RESULT',
-        payload: { error: 'YouTube returned empty subtitles. Open the video and try again.' }
-      });
-      return;
-    }
+    const plainText = textLines.join('\n');
     const title = videoDetails && videoDetails.title || 'YouTube Video';
     const markdown = '# ' + title + '\n\n' + plainText;
 
@@ -92,23 +87,6 @@
       type: 'TRANSCRIPT_RESULT',
       payload: { error: e.message || 'Unknown error extracting transcript' }
     });
-  }
-
-  async function fetchSubtitles(baseUrl, pot) {
-    const srtUrl = baseUrl + '&fmt=srt&c=WEB' + (pot ? '&pot=' + encodeURIComponent(pot) : '');
-    const response = await fetch(srtUrl);
-    const srtText = await response.text();
-
-    const lines = srtText.split('\n');
-    const textLines = [];
-    for (var i = 0; i < lines.length; i++) {
-      var trimmed = lines[i].trim();
-      if (!trimmed || /^\d+$/.test(trimmed) || trimmed.indexOf('-->') !== -1) {
-        continue;
-      }
-      textLines.push(trimmed);
-    }
-    return textLines.join('\n');
   }
 
   function getPlayerData(timeoutMs) {
