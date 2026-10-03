@@ -167,14 +167,27 @@
     { name: 'Перевод на русский', text: 'Переведи этот текст на русский язык, сохранив смысл и структуру.' }
   ];
 
+  // AI sites for "copy and open"; the user picks which ones are shown (key cpdownAiSites).
+  var AI_SITES = [
+    { id: 'chatgpt', name: 'ChatGPT', short: 'GPT', url: 'https://chatgpt.com/' },
+    { id: 'claude', name: 'Claude', short: 'Claude', url: 'https://claude.ai/new' },
+    { id: 'qwen', name: 'Qwen', short: 'Qwen', url: 'https://chat.qwen.ai/' },
+    { id: 'deepseek', name: 'DeepSeek', short: 'DS', url: 'https://chat.deepseek.com/' }
+  ];
+
   function loadPromptTemplates(callback) {
+    var allIds = AI_SITES.map(function (site) { return site.id; });
     try {
-      chrome.storage.sync.get('cpdownPromptTemplates', function (data) {
+      chrome.storage.sync.get(['cpdownPromptTemplates', 'cpdownAiSites'], function (data) {
         var list = data && data.cpdownPromptTemplates;
-        callback(Array.isArray(list) && list.length ? list : DEFAULT_PROMPT_TEMPLATES);
+        var ids = data && Array.isArray(data.cpdownAiSites) ? data.cpdownAiSites : allIds;
+        callback(
+          Array.isArray(list) && list.length ? list : DEFAULT_PROMPT_TEMPLATES,
+          AI_SITES.filter(function (site) { return ids.indexOf(site.id) !== -1; })
+        );
       });
     } catch (e) {
-      callback(DEFAULT_PROMPT_TEMPLATES);
+      callback(DEFAULT_PROMPT_TEMPLATES, AI_SITES);
     }
   }
 
@@ -189,13 +202,13 @@
       closePromptMenu();
       return;
     }
-    loadPromptTemplates(function (templates) {
+    loadPromptTemplates(function (templates, sites) {
       var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       var menu = document.createElement('div');
       menu.id = 'cpdown-prompt-menu';
       var rect = anchor.getBoundingClientRect();
       menu.style.cssText =
-        'position:fixed;z-index:2147483647;min-width:220px;max-width:320px;padding:4px;' +
+        'position:fixed;z-index:2147483647;min-width:240px;max-width:420px;padding:4px;' +
         'border-radius:8px;font:13px/1.4 system-ui,-apple-system,sans-serif;' +
         'box-shadow:0 4px 16px rgba(0,0,0,.25);' +
         'top:' + Math.round(rect.bottom + 6) + 'px;' +
@@ -204,33 +217,59 @@
               : 'background:#fff;color:#171717;border:1px solid #e5e5e5;');
 
       var hint = document.createElement('div');
-      hint.textContent = 'Choose a prompt:';
+      hint.textContent = sites.length ? 'Choose a prompt (name = copy, button = copy and open):' : 'Choose a prompt:';
       hint.style.cssText = 'padding:4px 8px;opacity:.6;font-size:12px;';
       menu.appendChild(hint);
 
       templates.forEach(function (template) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:2px;border-radius:6px;';
+        row.onmouseenter = function () { row.style.background = dark ? '#2e2e2e' : '#f2f2f2'; };
+        row.onmouseleave = function () { row.style.background = 'transparent'; };
+
         var item = document.createElement('button');
         item.textContent = template.name || 'Untitled';
-        item.title = template.text || '';
+        item.title = 'Copy: ' + (template.text || '');
         item.style.cssText =
-          'display:block;width:100%;text-align:left;padding:6px 8px;border:0;border-radius:6px;' +
-          'background:transparent;color:inherit;font:inherit;cursor:pointer;';
-        item.onmouseenter = function () { item.style.background = dark ? '#2e2e2e' : '#f2f2f2'; };
-        item.onmouseleave = function () { item.style.background = 'transparent'; };
+          'flex:1;min-width:0;text-align:left;padding:6px 8px;border:0;border-radius:6px;' +
+          'background:transparent;color:inherit;font:inherit;cursor:pointer;' +
+          'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
         item.onclick = function (event) {
           event.stopPropagation();
-          closePromptMenu();
-          var text = (template.text ? template.text.trim() + '\n\n' : '') + markdown;
-          navigator.clipboard.writeText(text).then(function () {
-            anchor.textContent = 'Copied!';
-          }).catch(function () {
-            anchor.textContent = 'Failed';
-          });
-          setTimeout(function () { anchor.textContent = 'Copy for AI'; }, 2000);
-          toast._autoTimer = setTimeout(function () { closeToast(toast); }, 15000);
+          copyWithPrompt(template, null);
         };
-        menu.appendChild(item);
+        row.appendChild(item);
+
+        sites.forEach(function (site) {
+          var siteBtn = document.createElement('button');
+          siteBtn.textContent = site.short;
+          siteBtn.title = 'Copy and open ' + site.name;
+          siteBtn.style.cssText =
+            'flex:none;padding:3px 6px;border-radius:4px;font:inherit;font-size:11px;cursor:pointer;' +
+            'background:transparent;color:inherit;border:1px solid ' + (dark ? '#444' : '#d4d4d4') + ';';
+          siteBtn.onclick = function (event) {
+            event.stopPropagation();
+            copyWithPrompt(template, site);
+          };
+          row.appendChild(siteBtn);
+        });
+        menu.appendChild(row);
       });
+
+      // Copies prompt + markdown; with a site, also opens it in a new tab (paste with Ctrl+V)
+      function copyWithPrompt(template, site) {
+        closePromptMenu();
+        // Open the tab synchronously inside the click so the popup blocker allows it
+        if (site) window.open(site.url, '_blank', 'noopener');
+        var text = (template.text ? template.text.trim() + '\n\n' : '') + markdown;
+        navigator.clipboard.writeText(text).then(function () {
+          anchor.textContent = site ? 'Copied, paste with Ctrl+V' : 'Copied!';
+        }).catch(function () {
+          anchor.textContent = 'Failed';
+        });
+        setTimeout(function () { anchor.textContent = 'Copy for AI'; }, site ? 4000 : 2000);
+        toast._autoTimer = setTimeout(function () { closeToast(toast); }, 15000);
+      }
 
       var edit = document.createElement('div');
       edit.textContent = 'Edit templates in cpdown options';

@@ -8,12 +8,19 @@
     { name: 'Перевод на русский', text: 'Переведи этот текст на русский язык, сохранив смысл и структуру.' }
   ];
 
+  var AI_SITES = [
+    { id: 'chatgpt', name: 'ChatGPT' },
+    { id: 'claude', name: 'Claude' },
+    { id: 'qwen', name: 'Qwen' },
+    { id: 'deepseek', name: 'DeepSeek' }
+  ];
+
   var style = document.createElement('style');
   style.textContent =
     '#cpdown-prompts{max-width:640px;margin:24px auto 48px;padding:0 16px;font:14px/1.5 system-ui,-apple-system,sans-serif;color:#171717}' +
     'body.dark #cpdown-prompts{color:#ededed}' +
     '#cpdown-prompts h2{font-size:16px;margin:0 0 4px}' +
-    '#cpdown-prompts p{margin:0 0 12px;opacity:.7;font-size:13px}' +
+    '#cpdown-prompts .sites{margin:0 0 12px;font-size:13px}#cpdown-prompts p{margin:0 0 12px;opacity:.7;font-size:13px}' +
     '#cpdown-prompts .row{border:1px solid #e5e5e5;border-radius:8px;padding:10px;margin-bottom:10px}' +
     'body.dark #cpdown-prompts .row{border-color:#333}' +
     '#cpdown-prompts input,#cpdown-prompts textarea{width:100%;box-sizing:border-box;font:inherit;padding:6px 8px;border:1px solid #d4d4d4;border-radius:6px;background:transparent;color:inherit}' +
@@ -33,7 +40,8 @@
     section.id = 'cpdown-prompts';
     section.innerHTML =
       '<h2>Copy for AI — prompt templates</h2>' +
-      '<p>The prompt is added above the transcript when you press “Copy for AI” in the YouTube subtitles toast.</p>' +
+      '<p>The prompt is added above the transcript when you press “Copy for AI” in the YouTube subtitles toast. Site buttons copy the text and open the chat — paste it with Ctrl+V.</p>' +
+      '<div class="sites"><b>Open in:</b> </div>' +
       '<div class="list"></div>' +
       '<div class="actions">' +
       '<button type="button" class="add">+ Add template</button>' +
@@ -44,6 +52,25 @@
     document.body.appendChild(section);
 
     var list = section.querySelector('.list');
+    var sitesBox = section.querySelector('.sites');
+    AI_SITES.forEach(function (site) {
+      var label = document.createElement('label');
+      label.style.cssText = 'margin-right:12px;white-space:nowrap;';
+      var box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = site.id;
+      box.style.cssText = 'width:auto;margin-right:4px;vertical-align:middle;';
+      box.onchange = saveSites;
+      label.appendChild(box);
+      label.appendChild(document.createTextNode(site.name));
+      sitesBox.appendChild(label);
+    });
+
+    function saveSites() {
+      var ids = [];
+      sitesBox.querySelectorAll('input').forEach(function (box) { if (box.checked) ids.push(box.value); });
+      chrome.storage.sync.set({ cpdownAiSites: ids }, function () { flash('Saved'); });
+    }
     var status = section.querySelector('.status');
 
     function addRow(template) {
@@ -105,6 +132,11 @@
         flash('Defaults restored');
       });
     };
+
+    chrome.storage.sync.get('cpdownAiSites', function (data) {
+      var ids = Array.isArray(data && data.cpdownAiSites) ? data.cpdownAiSites : AI_SITES.map(function (s) { return s.id; });
+      sitesBox.querySelectorAll('input').forEach(function (box) { box.checked = ids.indexOf(box.value) !== -1; });
+    });
 
     chrome.storage.sync.get(STORAGE_KEY, function (data) {
       var saved = data && data[STORAGE_KEY];
