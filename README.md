@@ -82,6 +82,11 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.10
+
+- **New:** Copy for AI menu gets site buttons — **GPT**, **Claude**, **Qwen**, **DS** (DeepSeek) — that copy prompt + transcript and open the chat in a new tab; paste with `Ctrl+V`
+- **New:** Options page checkboxes to choose which AI sites are shown
+
 ### v1.9
 
 - **New:** **Copy for AI** button in the YouTube subtitles toast — choose a prompt template and copy prompt + transcript in one click
@@ -152,4 +157,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.9**
+**v1.10**
