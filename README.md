@@ -82,6 +82,11 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.7.1
+
+- **Fix:** Right-click "Copy subtitles" copied only the video title — the `pot` token is now captured from both XHR and `fetch`, with a longer wait and one retry
+- **Fix:** Empty subtitles now show an error instead of copying just the title
+
 ### v1.7
 
 - **New:** Dark theme support — all UI surfaces now follow system `prefers-color-scheme`
@@ -139,4 +144,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.7**
+**v1.7.1**
