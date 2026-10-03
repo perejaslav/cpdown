@@ -131,6 +131,20 @@
     } else {
       toast.appendChild(copyBtn);
       toast.appendChild(saveBtn);
+      if (payload.debug && payload.debug.length) {
+        var logBtn = document.createElement('button');
+        logBtn.setAttribute('data-button', '');
+        logBtn.setAttribute('data-cancel', '');
+        logBtn.textContent = 'Log';
+        logBtn.onclick = function () {
+          navigator.clipboard.writeText('cpdown log\n' + payload.debug.join('\n')).then(function () {
+            logBtn.textContent = 'Copied!';
+          }).catch(function () {
+            logBtn.textContent = 'Failed';
+          });
+        };
+        toast.appendChild(logBtn);
+      }
     }
     toast.appendChild(closeBtn);
     root.appendChild(toast);

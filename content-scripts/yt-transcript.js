@@ -71,7 +71,8 @@
     // Method 1: timedtext (the original method)
     if (captionTracks && captionTracks.length > 0) {
       try {
-        var webTrack = pickTrack(captionTracks);
+        log('timedtext: tracks ' + listTracks(captionTracks));
+        var webTrack = pickTrack(captionTracks, playerResponse.captions.playerCaptionsTracklistRenderer);
         log('timedtext: track ' + describeTrack(webTrack));
         var srtUrl = cleanTrackUrl(webTrack.baseUrl) + '&fmt=srt&c=WEB' + (pot ? '&pot=' + encodeURIComponent(pot) : '');
         var response = await fetch(srtUrl);
@@ -197,7 +198,8 @@
     log('android: caption tracks: ' + (tracks ? tracks.length : 0) +
       (data && data.playabilityStatus ? ', status ' + data.playabilityStatus.status : ''));
     if (!tracks || tracks.length === 0) return '';
-    var track = pickTrack(tracks);
+    log('android: tracks ' + listTracks(tracks));
+    var track = pickTrack(tracks, data.captions.playerCaptionsTracklistRenderer);
     log('android: track ' + describeTrack(track));
     var trackUrl = cleanTrackUrl(track.baseUrl);
     var res = await fetch(trackUrl, { credentials: 'omit' });
@@ -209,10 +211,10 @@
   // Picks the track in the language spoken in the video:
   // the auto-generated (asr) track tells the spoken language;
   // a manual track in that language is preferred over the asr one.
-  function pickTrack(tracks) {
+  function pickTrack(tracks, renderer) {
     var asr = null;
     for (var i = 0; i < tracks.length; i++) {
-      if (tracks[i].kind === 'asr') { asr = tracks[i]; break; }
+      if (isAsr(tracks[i])) { asr = tracks[i]; break; }
     }
     if (asr) {
       var spoken = baseLang(asr.languageCode);
@@ -221,7 +223,20 @@
       }
       return asr;
     }
+    // No auto-generated track: use the track YouTube itself shows by default
+    var audio = renderer && renderer.audioTracks && renderer.audioTracks[renderer.defaultAudioTrackIndex || 0];
+    if (audio && typeof audio.defaultCaptionTrackIndex === 'number' && tracks[audio.defaultCaptionTrackIndex]) {
+      return tracks[audio.defaultCaptionTrackIndex];
+    }
     return tracks[0];
+  }
+
+  function isAsr(track) {
+    return track.kind === 'asr' || /^a\./.test(track.vssId || '');
+  }
+
+  function listTracks(tracks) {
+    return tracks.map(describeTrack).join(', ');
   }
 
   function baseLang(code) {
@@ -229,7 +244,7 @@
   }
 
   function describeTrack(track) {
-    return (track.languageCode || '?') + (track.kind === 'asr' ? ' (auto)' : '');
+    return (track.languageCode || '?') + (isAsr(track) ? ' (auto)' : '');
   }
 
   // Drops format and auto-translation parameters from a caption track URL.
