@@ -72,7 +72,9 @@
     if (captionTracks && captionTracks.length > 0) {
       try {
         log('timedtext: tracks ' + listTracks(captionTracks));
-        var webTrack = pickTrack(captionTracks, playerResponse.captions.playerCaptionsTracklistRenderer);
+        var webOrig = originalAudioLang(playerResponse);
+        log('timedtext: original audio ' + (webOrig || 'unknown'));
+        var webTrack = pickTrack(captionTracks, playerResponse.captions.playerCaptionsTracklistRenderer, webOrig);
         log('timedtext: track ' + describeTrack(webTrack));
         var srtUrl = cleanTrackUrl(webTrack.baseUrl) + '&fmt=srt&c=WEB' + (pot ? '&pot=' + encodeURIComponent(pot) : '');
         var response = await fetch(srtUrl);
@@ -87,7 +89,7 @@
     // Method 2: caption tracks from the Android app API (no pot needed)
     if (!plainText && actualVideoId) {
       try {
-        plainText = await fetchViaAndroidPlayer(actualVideoId);
+        plainText = await fetchViaAndroidPlayer(actualVideoId, playerResponse);
       } catch (e) {
         log('android: failed: ' + (e && e.message));
       }
@@ -178,7 +180,7 @@
     return segments.join('\n');
   }
 
-  async function fetchViaAndroidPlayer(videoId) {
+  async function fetchViaAndroidPlayer(videoId, playerResponseForLang) {
     var cfg = readYtcfg();
     var url = '/youtubei/v1/player?prettyPrint=false' + (cfg.apiKey ? '&key=' + cfg.apiKey : '');
     var response = await fetch(url, {
@@ -199,7 +201,9 @@
       (data && data.playabilityStatus ? ', status ' + data.playabilityStatus.status : ''));
     if (!tracks || tracks.length === 0) return '';
     log('android: tracks ' + listTracks(tracks));
-    var track = pickTrack(tracks, data.captions.playerCaptionsTracklistRenderer);
+    var orig = originalAudioLang(data) || originalAudioLang(playerResponseForLang);
+    log('android: original audio ' + (orig || 'unknown'));
+    var track = pickTrack(tracks, data.captions.playerCaptionsTracklistRenderer, orig);
     log('android: track ' + describeTrack(track));
     var trackUrl = cleanTrackUrl(track.baseUrl);
     var res = await fetch(trackUrl, { credentials: 'omit' });
@@ -211,11 +215,43 @@
   // Picks the track in the language spoken in the video:
   // the auto-generated (asr) track tells the spoken language;
   // a manual track in that language is preferred over the asr one.
-  function pickTrack(tracks, renderer) {
-    var asr = null;
-    for (var i = 0; i < tracks.length; i++) {
-      if (isAsr(tracks[i])) { asr = tracks[i]; break; }
+  // Language of the original audio. Videos with auto-dubbing have several
+  // audio tracks (and an auto-generated caption track for each of them).
+  function originalAudioLang(response) {
+    var formats = (response && response.streamingData && response.streamingData.adaptiveFormats) || [];
+    var byFlag = '', byName = '';
+    for (var i = 0; i < formats.length; i++) {
+      var audio = formats[i].audioTrack;
+      if (!audio || !audio.id) continue;
+      var lang = baseLang(String(audio.id).split('.')[0]);
+      if (!byFlag && audio.isAutoDubbed === false) byFlag = lang;
+      if (!byName && /original|оригинал/i.test(audio.displayName || '')) byName = lang;
     }
+    return byName || byFlag;
+  }
+
+  function pickTrack(tracks, renderer, originalLang) {
+    if (originalLang) {
+      var manualOrig = null, asrOrig = null;
+      for (var t = 0; t < tracks.length; t++) {
+        if (baseLang(tracks[t].languageCode) !== originalLang) continue;
+        if (isAsr(tracks[t])) { if (!asrOrig) asrOrig = tracks[t]; }
+        else if (!manualOrig) manualOrig = tracks[t];
+      }
+      if (manualOrig || asrOrig) return manualOrig || asrOrig;
+    }
+    var asr = null;
+    var asrTracks = tracks.filter(isAsr);
+    if (asrTracks.length > 1) {
+      // Several auto-generated tracks and unknown original: prefer the browser language
+      var prefs = (navigator.languages || [navigator.language || '']).map(baseLang);
+      for (var p = 0; p < prefs.length && !asr; p++) {
+        for (var q = 0; q < asrTracks.length; q++) {
+          if (baseLang(asrTracks[q].languageCode) === prefs[p]) { asr = asrTracks[q]; break; }
+        }
+      }
+    }
+    if (!asr) asr = asrTracks[0] || null;
     if (asr) {
       var spoken = baseLang(asr.languageCode);
       for (var j = 0; j < tracks.length; j++) {
