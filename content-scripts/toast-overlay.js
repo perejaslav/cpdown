@@ -62,7 +62,8 @@
     titleEl.setAttribute('data-title', '');
     titleEl.textContent = isError
       ? 'cpdown: ' + payload.error
-      : 'Transcript ready: ' + title + ' (' + tokenCount.toLocaleString() + ' tokens)';
+      : (payload.kind === 'page' ? 'Markdown ready: ' : 'Transcript ready: ') +
+        title + ' (' + tokenCount.toLocaleString() + ' tokens)';
     if (isError) {
       icon.innerHTML =
         '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
@@ -161,8 +162,8 @@
 
   // Default templates; the user edits them on the options page (key cpdownPromptTemplates).
   var DEFAULT_PROMPT_TEMPLATES = [
-    { name: 'Краткий конспект', text: 'Сделай краткий конспект этого видео по пунктам.' },
-    { name: '5 главных мыслей', text: 'Выдели 5 главных мыслей из этого видео и кратко поясни каждую.' },
+    { name: 'Краткий конспект', text: 'Сделай краткий конспект этого материала по пунктам.' },
+    { name: '5 главных мыслей', text: 'Выдели 5 главных мыслей из этого материала и кратко поясни каждую.' },
     { name: 'Статья на русском', text: 'Преобразуй этот транскрипт в связную статью на русском языке. Сохрани все факты без исключения: цифры, даты, имена, названия, примеры, аргументы и выводы. Ничего не сокращай и не обобщай до потери деталей, ничего не добавляй от себя. Убери только слова-паразиты, повторы и оговорки. Раздели текст на логичные разделы с подзаголовками.' },
     { name: 'Перевод на русский', text: 'Переведи этот текст на русский язык, сохранив смысл и структуру.' }
   ];
@@ -293,6 +294,9 @@
       if (toast.parentNode) toast.remove();
     }, 300);
   }
+
+  // Used by content.js to show this toast for regular pages (toolbar button / Ctrl+Shift+T)
+  window.__cpdownShowOverlay = showOverlay;
 
   chrome.runtime.onMessage.addListener(function (msg) {
     if (msg.type === 'SHOW_TRANSCRIPT_TOAST') {

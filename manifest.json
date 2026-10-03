@@ -14,7 +14,7 @@
       }
    },
    "content_scripts": [ {
-      "js": [ "content-scripts/content.js", "content-scripts/save-selection.js" ],
+      "js": [ "content-scripts/toast-overlay.js", "content-scripts/content.js", "content-scripts/save-selection.js" ],
       "matches": [ "*://*/*" ]
    } ],
    "description": "Copy any webpage/YouTube subtitle as clean markdown",
