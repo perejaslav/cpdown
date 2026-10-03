@@ -1,12 +1,25 @@
 (async () => {
-  try {
-    var playerData;
+  // Step log, sent back to the background service worker console as "[cpdown] transcript steps".
+  var startedAt = Date.now();
+  var debug = [];
+  function log(msg) {
+    debug.push('+' + (Date.now() - startedAt) + 'ms ' + msg);
+  }
+  function send(payload) {
+    payload.debug = debug;
+    chrome.runtime.sendMessage({ type: 'TRANSCRIPT_RESULT', payload: payload });
+  }
 
-    // Try 1: maybe youtube-main-world.js is already loaded (most common case)
+  try {
+    log('start, visibility=' + document.visibilityState + ', url=' + location.pathname + location.search);
+    var playerData = null;
+
+    // Try 1: youtube-main-world.js is usually already loaded by content.js
     try {
       playerData = await getPlayerData(3000);
+      log('player data: from already loaded main-world script');
     } catch (firstErr) {
-      // Try 2: inject youtube-main-world.js ourselves and retry
+      log('player data: no answer in 3s, injecting main-world script');
       await new Promise(function (resolve) {
         var s = document.createElement('script');
         s.src = chrome.runtime.getURL('youtube-main-world.js');
@@ -14,55 +27,91 @@
         s.onerror = function () { setTimeout(resolve, 500); };
         (document.head || document.documentElement).appendChild(s);
       });
-      playerData = await getPlayerData(10000);
+      try {
+        playerData = await getPlayerData(5000);
+        log('player data: ok after injection');
+      } catch (secondErr) {
+        log('player data: no answer after injection');
+      }
     }
 
-    const playerResponse = playerData.ytInitialPlayerResponse;
-    const pot = playerData.pot;
-
+    var playerResponse = playerData && playerData.ytInitialPlayerResponse;
+    var pot = playerData && playerData.pot;
     if (!playerResponse) {
-      chrome.runtime.sendMessage({
-        type: 'TRANSCRIPT_RESULT',
-        payload: { error: 'Could not get video data from YouTube' }
-      });
+      playerResponse = readInlineJson('ytInitialPlayerResponse');
+      log('player response from page HTML: ' + (playerResponse ? 'found' : 'not found'));
+    }
+    if (!playerResponse) {
+      send({ error: 'Could not get video data from YouTube' });
       return;
     }
 
-    const videoDetails = playerResponse.videoDetails;
-    const actualVideoId = videoDetails && (videoDetails.videoId || videoDetails.id);
+    var videoDetails = playerResponse.videoDetails;
+    var actualVideoId = videoDetails && (videoDetails.videoId || videoDetails.id);
     var expectedVideoId = '';
     try {
       var currentUrl = new URL(location.href);
       expectedVideoId = currentUrl.searchParams.get('v') || (currentUrl.hostname === 'youtu.be' ? currentUrl.pathname.slice(1).split('/')[0] : '');
     } catch (_) {}
+    log('videoId expected=' + expectedVideoId + ' actual=' + actualVideoId);
     if (expectedVideoId && actualVideoId && expectedVideoId !== actualVideoId) {
-      chrome.runtime.sendMessage({
-        type: 'TRANSCRIPT_RESULT',
-        payload: { error: 'YouTube returned stale video data. Please try again.' }
-      });
+      send({ error: 'YouTube returned stale video data. Please try again.' });
       return;
     }
 
-    const captionTracks =
-      playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+    var title = (videoDetails && videoDetails.title) || 'YouTube Video';
+    var captionTracks =
+      playerResponse.captions &&
+      playerResponse.captions.playerCaptionsTracklistRenderer &&
+      playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
+    log('caption tracks: ' + (captionTracks ? captionTracks.length : 0) + ', pot: ' + (pot ? 'yes' : 'no'));
 
-    if (!captionTracks || captionTracks.length === 0) {
-      chrome.runtime.sendMessage({
-        type: 'TRANSCRIPT_RESULT',
-        payload: { error: 'No captions available for this video' }
-      });
+    var plainText = '';
+
+    // Method 1: timedtext (the original method)
+    if (captionTracks && captionTracks.length > 0) {
+      try {
+        var srtUrl = captionTracks[0].baseUrl + '&fmt=srt&c=WEB' + (pot ? '&pot=' + encodeURIComponent(pot) : '');
+        var response = await fetch(srtUrl);
+        var srtText = await response.text();
+        log('timedtext: HTTP ' + response.status + ', ' + srtText.length + ' chars');
+        plainText = srtToText(srtText);
+      } catch (e) {
+        log('timedtext: failed: ' + (e && e.message));
+      }
+    }
+
+    // Method 2: the "Show transcript" panel API (does not need pot)
+    if (!plainText) {
+      try {
+        plainText = await fetchTranscriptPanel();
+      } catch (e) {
+        log('transcript panel: failed: ' + (e && e.message));
+      }
+    }
+
+    if (!plainText) {
+      if (!captionTracks || captionTracks.length === 0) {
+        send({ error: 'No captions available for this video' });
+      } else {
+        send({ error: 'YouTube returned empty subtitles' });
+      }
       return;
     }
 
-    const track = captionTracks[0];
-    const baseUrl = track.baseUrl;
-    const srtUrl = baseUrl + '&fmt=srt&c=WEB' + (pot ? '&pot=' + pot : '');
+    var markdown = '# ' + title + '\n\n' + plainText;
+    // Rough token estimate: ~4 chars per token
+    var tokenCount = Math.ceil(markdown.length / 4);
+    log('done, ' + markdown.length + ' chars');
+    send({ markdown: markdown, title: title, tokenCount: tokenCount, videoId: actualVideoId });
+  } catch (e) {
+    log('unexpected error: ' + (e && e.message));
+    send({ error: (e && e.message) || 'Unknown error extracting transcript' });
+  }
 
-    const response = await fetch(srtUrl);
-    const srtText = await response.text();
-
-    const lines = srtText.split('\n');
-    const textLines = [];
+  function srtToText(srtText) {
+    var lines = srtText.split('\n');
+    var textLines = [];
     for (var i = 0; i < lines.length; i++) {
       var trimmed = lines[i].trim();
       if (!trimmed || /^\d+$/.test(trimmed) || trimmed.indexOf('-->') !== -1) {
@@ -70,23 +119,111 @@
       }
       textLines.push(trimmed);
     }
+    return textLines.join('\n');
+  }
 
-    const plainText = textLines.join('\n');
-    const title = videoDetails && videoDetails.title || 'YouTube Video';
-    const markdown = '# ' + title + '\n\n' + plainText;
-
-    // Rough token estimate: ~4 chars per token
-    var tokenCount = Math.ceil(markdown.length / 4);
-
-    chrome.runtime.sendMessage({
-      type: 'TRANSCRIPT_RESULT',
-      payload: { markdown: markdown, title: title, tokenCount: tokenCount, videoId: actualVideoId }
+  async function fetchTranscriptPanel() {
+    var initialData = readInlineJson('ytInitialData');
+    if (!initialData) {
+      log('transcript panel: ytInitialData not found');
+      return '';
+    }
+    var params = findValue(initialData, function (node) {
+      return node.getTranscriptEndpoint && node.getTranscriptEndpoint.params;
     });
-  } catch (e) {
-    chrome.runtime.sendMessage({
-      type: 'TRANSCRIPT_RESULT',
-      payload: { error: e.message || 'Unknown error extracting transcript' }
+    if (!params) {
+      log('transcript panel: video has no transcript button');
+      return '';
+    }
+    var html = document.documentElement.innerHTML;
+    var versionMatch = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/);
+    var keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
+    var clientVersion = versionMatch ? versionMatch[1] : '2.20250101.00.00';
+    var url = '/youtubei/v1/get_transcript?prettyPrint=false' + (keyMatch ? '&key=' + keyMatch[1] : '');
+    var response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: { client: { clientName: 'WEB', clientVersion: clientVersion } },
+        params: params
+      })
     });
+    log('transcript panel: HTTP ' + response.status);
+    if (!response.ok) return '';
+    var data = await response.json();
+    var segments = [];
+    collect(data, function (node) {
+      var seg = node.transcriptSegmentRenderer;
+      if (seg && seg.snippet) {
+        var text = seg.snippet.simpleText ||
+          (seg.snippet.runs || []).map(function (r) { return r.text; }).join('');
+        if (text && text.trim()) segments.push(text.trim());
+      }
+    });
+    log('transcript panel: ' + segments.length + ' segments');
+    return segments.join('\n');
+  }
+
+  // Reads a JSON object assigned in an inline <script> of the initially loaded page.
+  function readInlineJson(name) {
+    var scripts = document.querySelectorAll('script');
+    var marker = name + ' = ';
+    for (var i = 0; i < scripts.length; i++) {
+      var text = scripts[i].textContent || '';
+      var at = text.indexOf(marker);
+      if (at === -1) continue;
+      var start = text.indexOf('{', at);
+      if (start === -1) continue;
+      var end = findJsonEnd(text, start);
+      if (end === -1) continue;
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  function findJsonEnd(text, start) {
+    var depth = 0, inString = false, escaped = false;
+    for (var i = start; i < text.length; i++) {
+      var ch = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+      } else if (ch === '"') inString = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  function findValue(root, pick) {
+    var found = null;
+    collect(root, function (node) {
+      if (found) return;
+      var v = pick(node);
+      if (v) found = v;
+    });
+    return found;
+  }
+
+  function collect(root, visit) {
+    var stack = [root];
+    while (stack.length) {
+      var node = stack.pop();
+      if (!node || typeof node !== 'object') continue;
+      visit(node);
+      // Push children in reverse so they are visited in document order.
+      var keys = Object.keys(node);
+      for (var i = keys.length - 1; i >= 0; i--) {
+        var child = node[keys[i]];
+        if (child && typeof child === 'object') stack.push(child);
+      }
+    }
   }
 
   function getPlayerData(timeoutMs) {
