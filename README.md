@@ -82,6 +82,12 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.12
+
+- **New:** Right-click menu **Copy selection for AI** — converts the selected text to Markdown and opens the Copy for AI menu right away
+- **New:** Junk cleanup for regular pages — removes short lines starting with stop phrases ("Subscribe", "Related articles", "Comments", cookie notices…) and share-link lines; on/off switch and editable phrase list on the options page
+- **Fix:** The YouTube subtitles menu handler no longer reacts to other cpdown menu items (no stray "No URL found" toast on X.com)
+
 ### v1.11
 
 - **New:** **Copy for AI** on regular pages — the toolbar button / `Ctrl+Shift+T` now shows the cpdown toast with **Copy**, **Copy for AI** and **Save .md**
@@ -163,4 +169,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.11**
+**v1.12**
