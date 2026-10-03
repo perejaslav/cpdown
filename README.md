@@ -82,6 +82,12 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.11
+
+- **New:** **Copy for AI** on regular pages — the toolbar button / `Ctrl+Shift+T` now shows the cpdown toast with **Copy**, **Copy for AI** and **Save .md**
+- **Fix:** Toolbar button on a YouTube video uses the same hidden-tab flow as the context menu (retries, timeout, visible errors)
+- **Change:** Default templates say "material" instead of "video" so they fit articles too
+
 ### v1.10
 
 - **New:** Copy for AI menu gets site buttons — **GPT**, **Claude**, **Qwen**, **DS** (DeepSeek) — that copy prompt + transcript and open the chat in a new tab; paste with `Ctrl+V`
@@ -157,4 +163,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.10**
+**v1.11**
