@@ -17,7 +17,16 @@
 
   var style = document.createElement('style');
   style.textContent =
-    '#cpdown-prompts{max-width:640px;margin:24px auto 48px;padding:0 16px;font:14px/1.5 system-ui,-apple-system,sans-serif;color:#171717}' +
+    '#cpdown-cleanup{max-width:640px;margin:0 auto 48px;padding:0 16px;font:14px/1.5 system-ui,-apple-system,sans-serif;color:#171717}body.dark #cpdown-cleanup{color:#ededed}' +
+    '#cpdown-cleanup h2{font-size:16px;margin:0 0 4px}#cpdown-cleanup p{margin:0 0 12px;opacity:.7;font-size:13px}' +
+    '#cpdown-cleanup textarea{width:100%;box-sizing:border-box;min-height:180px;font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d4d4d4;border-radius:6px;background:transparent;color:inherit;margin:8px 0}' +
+    'body.dark #cpdown-cleanup textarea{border-color:#444}' +
+    '#cpdown-cleanup button{font:inherit;font-size:13px;padding:6px 12px;border-radius:6px;border:1px solid #d4d4d4;background:transparent;color:inherit;cursor:pointer}' +
+    'body.dark #cpdown-cleanup button{border-color:#444}' +
+    '#cpdown-cleanup button.primary{background:#171717;color:#fff;border-color:#171717}' +
+    'body.dark #cpdown-cleanup button.primary{background:#ededed;color:#171717;border-color:#ededed}' +
+    '#cpdown-cleanup .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#cpdown-cleanup .status{font-size:13px;opacity:.7}' +
+    '#cpdown-prompts{max-width:640px;margin:24px auto 32px;padding:0 16px;font:14px/1.5 system-ui,-apple-system,sans-serif;color:#171717}' +
     'body.dark #cpdown-prompts{color:#ededed}' +
     '#cpdown-prompts h2{font-size:16px;margin:0 0 4px}' +
     '#cpdown-prompts .sites{margin:0 0 12px;font-size:13px}#cpdown-prompts p{margin:0 0 12px;opacity:.7;font-size:13px}' +
@@ -144,6 +153,72 @@
     });
   }
 
-  if (document.body) init();
-  else document.addEventListener('DOMContentLoaded', init);
+  // Junk cleanup settings for regular pages (keys cpdownCleanupEnabled, cpdownCleanupPhrases).
+  var DEFAULT_CLEANUP_PHRASES = [
+    'подпишитесь', 'подписывайтесь', 'подписаться на', 'читайте также', 'читать также',
+    'смотрите также', 'поделиться', 'поделитесь', 'оставьте комментарий', 'комментарии',
+    'мы используем cookie', 'мы используем файлы cookie', 'принять cookie', 'реклама',
+    'вам также может понравиться', 'похожие статьи', 'похожие материалы',
+    'subscribe', 'sign up for', 'newsletter', 'read also', 'read more', 'related articles',
+    'related posts', 'you may also like', 'share this', 'share on', 'leave a comment',
+    'comments', 'we use cookies', 'accept cookies', 'advertisement', 'sponsored'
+  ];
+
+  function initCleanup() {
+    var section = document.createElement('section');
+    section.id = 'cpdown-cleanup';
+    section.className = 'cpdown-extra';
+    section.innerHTML =
+      '<h2>Junk cleanup</h2>' +
+      '<p>Removes short lines that start with one of these phrases (one per line) and lines made only of share links. Applies to regular pages copied with the toolbar button.</p>' +
+      '<label class="toggle"><input type="checkbox" class="enabled"> Enabled</label>' +
+      '<textarea class="phrases"></textarea>' +
+      '<div class="actions">' +
+      '<button type="button" class="primary save">Save</button>' +
+      '<button type="button" class="reset">Reset to defaults</button>' +
+      '<span class="status"></span>' +
+      '</div>';
+    document.body.appendChild(section);
+
+    var enabled = section.querySelector('.enabled');
+    var phrases = section.querySelector('.phrases');
+    var status = section.querySelector('.status');
+
+    function flash(message) {
+      status.textContent = message;
+      setTimeout(function () { status.textContent = ''; }, 2000);
+    }
+
+    chrome.storage.sync.get(['cpdownCleanupEnabled', 'cpdownCleanupPhrases'], function (data) {
+      enabled.checked = !(data && data.cpdownCleanupEnabled === false);
+      var list = data && Array.isArray(data.cpdownCleanupPhrases) ? data.cpdownCleanupPhrases : DEFAULT_CLEANUP_PHRASES;
+      phrases.value = list.join('\n');
+    });
+
+    enabled.onchange = function () {
+      chrome.storage.sync.set({ cpdownCleanupEnabled: enabled.checked }, function () { flash('Saved'); });
+    };
+
+    section.querySelector('.save').onclick = function () {
+      var list = phrases.value.split('\n').map(function (p) { return p.trim(); }).filter(Boolean);
+      chrome.storage.sync.set({ cpdownCleanupPhrases: list }, function () {
+        flash(chrome.runtime.lastError ? 'Error: ' + chrome.runtime.lastError.message : 'Saved');
+      });
+    };
+
+    section.querySelector('.reset').onclick = function () {
+      chrome.storage.sync.remove('cpdownCleanupPhrases', function () {
+        phrases.value = DEFAULT_CLEANUP_PHRASES.join('\n');
+        flash('Defaults restored');
+      });
+    };
+  }
+
+  function start() {
+    init();
+    initCleanup();
+  }
+
+  if (document.body) start();
+  else document.addEventListener('DOMContentLoaded', start);
 })();

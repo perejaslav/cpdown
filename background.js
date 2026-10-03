@@ -43,10 +43,28 @@ R.runtime.onMessage.addListener(function _cpdownOnMsg(a,b){
  }
 });
 try{R.contextMenus.remove("cpdown-transcript",function(){void R.runtime.lastError;R.contextMenus.create({id:"cpdown-transcript",title:"Copy subtitles",contexts:["link"],targetUrlPatterns:["*://*.youtube.com/*","*://youtu.be/*"]},function(){void R.runtime.lastError})})}catch(e){try{R.contextMenus.create({id:"cpdown-transcript",title:"Copy subtitles",contexts:["link"],targetUrlPatterns:["*://*.youtube.com/*","*://youtu.be/*"]},function(){void R.runtime.lastError})}catch(_){}}
+try{R.contextMenus.remove("cpdown-selection-ai",function(){void R.runtime.lastError;R.contextMenus.create({id:"cpdown-selection-ai",title:"Copy selection for AI",contexts:["selection"]},function(){void R.runtime.lastError})})}catch(e){}
 R.contextMenus.onClicked.addListener(async function(a,b){
+ if(a.menuItemId==="cpdown-selection-ai"){await _cpdownSelectionForAi(b);return}
+ if(a.menuItemId!=="cpdown-transcript")return;
  var c=a.linkUrl;if(!c){_cpdownShowToast(b.id,{error:"No URL found"});return}
  await _cpdownExtract(c,b.id)
 });
+// Converts the current selection to Markdown and opens the Copy for AI menu in the page toast.
+async function _cpdownSelectionForAi(tab){
+ if(!tab||!tab.id)return;
+ try{
+  await R.scripting.executeScript({target:{tabId:tab.id},files:["content-scripts/toast-overlay.js","content-scripts/save-selection.js"]});
+  await R.scripting.executeScript({target:{tabId:tab.id},func:function(){
+   var md=typeof window.__cpdownSelectionToMarkdown==="function"?window.__cpdownSelectionToMarkdown():"";
+   if(!md.trim())md=String(window.getSelection()||"").trim();
+   var title=(document.title||"selection").replace(/[\/:*?"<>|\u0000-\u001F]+/g," ").replace(/\s+/g," ").trim().slice(0,120)||"selection";
+   if(typeof window.__cpdownShowOverlay!=="function")return;
+   if(!md.trim()){window.__cpdownShowOverlay({error:"No text selected"});return}
+   window.__cpdownShowOverlay({markdown:md,title:title,tokenCount:Math.ceil(md.length/4),kind:"selection",openAiMenu:true});
+  }});
+ }catch(e){console.error("[cpdown] selection err:",e)}
+}
 // Opens the video in a hidden tab and injects the transcript extractor.
 // Used by the YouTube link context menu and by the toolbar button on a video page.
 async function _cpdownExtract(c,originalTabId){

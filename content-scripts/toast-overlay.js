@@ -60,10 +60,12 @@
 
     var titleEl = document.createElement('div');
     titleEl.setAttribute('data-title', '');
+    var prefix = payload.kind === 'page' ? 'Markdown ready: '
+      : payload.kind === 'selection' ? 'Selection ready: ' : 'Transcript ready: ';
     titleEl.textContent = isError
       ? 'cpdown: ' + payload.error
-      : (payload.kind === 'page' ? 'Markdown ready: ' : 'Transcript ready: ') +
-        title + ' (' + tokenCount.toLocaleString() + ' tokens)';
+      : prefix + title + ' (' + tokenCount.toLocaleString() + ' tokens' +
+        (payload.removedLines ? ', removed ' + payload.removedLines + ' junk lines' : '') + ')';
     if (isError) {
       icon.innerHTML =
         '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
@@ -154,6 +156,11 @@
       toast.style.setProperty('--initial-height', h);
       toast.style.setProperty('--front-toast-height', h);
     });
+
+    // "Copy selection for AI" opens the template menu right away
+    if (payload.openAiMenu && !isError) {
+      setTimeout(function () { aiBtn.click(); }, 50);
+    }
 
     // Auto-dismiss after 15 s
     var autoTimer = setTimeout(function () { closeToast(toast); }, isError ? 60000 : 15000);
@@ -295,8 +302,66 @@
     }, 300);
   }
 
-  // Used by content.js to show this toast for regular pages (toolbar button / Ctrl+Shift+T)
-  window.__cpdownShowOverlay = showOverlay;
+  // Junk cleanup for regular pages; settings are edited on the options page.
+  var DEFAULT_CLEANUP_PHRASES = [
+    'подпишитесь', 'подписывайтесь', 'подписаться на', 'читайте также', 'читать также',
+    'смотрите также', 'поделиться', 'поделитесь', 'оставьте комментарий', 'комментарии',
+    'мы используем cookie', 'мы используем файлы cookie', 'принять cookie', 'реклама',
+    'вам также может понравиться', 'похожие статьи', 'похожие материалы',
+    'subscribe', 'sign up for', 'newsletter', 'read also', 'read more', 'related articles',
+    'related posts', 'you may also like', 'share this', 'share on', 'leave a comment',
+    'comments', 'we use cookies', 'accept cookies', 'advertisement', 'sponsored'
+  ];
+  var SHARE_WORDS = /^(twitter|x|facebook|vk|вконтакте|telegram|телеграм|whatsapp|linkedin|reddit|одноклассники|ok|email|e-mail|pinterest|threads)$/i;
+
+  // Removes short lines that start with a stop phrase and lines made only of share links.
+  function cleanupMarkdown(markdown, phrases) {
+    var lowered = phrases.map(function (p) { return p.trim().toLowerCase(); }).filter(Boolean);
+    var removed = 0;
+    var kept = markdown.split('\n').filter(function (line) {
+      var links = line.match(/\[([^\]]*)\]\([^)]*\)/g);
+      var rest = line.replace(/\[([^\]]*)\]\([^)]*\)/g, '').replace(/[\s|•·,–—-]/g, '');
+      if (links && !rest && links.every(function (l) { return SHARE_WORDS.test(l.replace(/^\[|\]\(.*$/g, '').trim()); })) {
+        removed++;
+        return false;
+      }
+      var plain = line.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^[\s#>*_\-+\d.)]+/, '')
+        .replace(/[*_`]/g, '').trim().toLowerCase();
+      if (plain && plain.length <= 150 && lowered.some(function (p) { return plain.indexOf(p) === 0; })) {
+        removed++;
+        return false;
+      }
+      return true;
+    });
+    return { markdown: kept.join('\n').replace(/\n{3,}/g, '\n\n').trim(), removed: removed };
+  }
+
+  // Used by content.js (toolbar button / Ctrl+Shift+T) and background.js (selection menu)
+  window.__cpdownShowOverlay = function (payload) {
+    if (payload.kind !== 'page') {
+      showOverlay(payload);
+      return;
+    }
+    try {
+      chrome.storage.sync.get(['cpdownCleanupEnabled', 'cpdownCleanupPhrases'], function (data) {
+        if (data && data.cpdownCleanupEnabled === false) {
+          showOverlay(payload);
+          return;
+        }
+        var phrases = data && Array.isArray(data.cpdownCleanupPhrases) ? data.cpdownCleanupPhrases : DEFAULT_CLEANUP_PHRASES;
+        var result = cleanupMarkdown(payload.markdown || '', phrases);
+        if (result.removed) {
+          var ratio = result.markdown.length / Math.max(1, (payload.markdown || '').length);
+          payload.tokenCount = Math.round((payload.tokenCount || 0) * ratio);
+          payload.markdown = result.markdown;
+          payload.removedLines = result.removed;
+        }
+        showOverlay(payload);
+      });
+    } catch (e) {
+      showOverlay(payload);
+    }
+  };
 
   chrome.runtime.onMessage.addListener(function (msg) {
     if (msg.type === 'SHOW_TRANSCRIPT_TOAST') {

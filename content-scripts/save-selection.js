@@ -5,7 +5,11 @@
   const BUTTON_ID = "cpdown-save-selection-button";
   const META_ID = "cpdown-save-selection-meta";
 
+  // "Copy selection for AI" needs plain text without Markdown escaping
+  let escapeEnabled = true;
+
   function escapeMarkdown(text) {
+    if (!escapeEnabled) return text;
     return text.replace(/\\/g, "\\\\").replace(/([`*_{}[\]()#+\-.!>])/g, "\\$1");
   }
 
@@ -65,6 +69,22 @@
     const md = childrenToMarkdown(template.content).replace(/\n{3,}/g, "\n\n").trim();
     return md || escapeMarkdown(fallbackText || "");
   }
+
+  // Used by the "Copy selection for AI" context menu (background.js)
+  window.__cpdownSelectionToMarkdown = function () {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return "";
+    const container = document.createElement("div");
+    for (let i = 0; i < selection.rangeCount; i++) {
+      container.appendChild(selection.getRangeAt(i).cloneContents());
+    }
+    escapeEnabled = false;
+    try {
+      return htmlToMarkdown(container.innerHTML, selection.toString());
+    } finally {
+      escapeEnabled = true;
+    }
+  };
 
   function safeFileName(value) {
     return (value || "selection")
