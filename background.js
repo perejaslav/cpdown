@@ -58,8 +58,19 @@ R.contextMenus.onClicked.addListener(async function(a,b){
    R.tabs.onUpdated.addListener(i)
   });
   await new Promise(function(f){setTimeout(f,1000)});
-  _cpdownLog("tab loaded, injecting yt-transcript.js");
-  await R.scripting.executeScript({target:{tabId:e.id},files:["content-scripts/yt-transcript.js"]})
+  // YouTube may replace the page in the hidden tab right after "complete"
+  // ("Frame with ID 0 was removed"), so retry injection a few times.
+  for(var k=1;;k++){
+   try{
+    _cpdownLog("injecting yt-transcript.js, attempt",k);
+    await R.scripting.executeScript({target:{tabId:e.id},files:["content-scripts/yt-transcript.js"]});
+    break
+   }catch(x){
+    _cpdownLog("inject attempt",k,"failed:",x&&x.message);
+    if(k>=5)throw x;
+    await new Promise(function(f){setTimeout(f,1500)})
+   }
+  }
  }catch(f){var g=await _cpdownTakeCtx();console.error("[cpdown] ctx err:",f);if(g&&g.hiddenTabId)try{R.tabs.remove(g.hiddenTabId)}catch(x){}_cpdownShowToast(b.id,{error:"Failed: "+(f.message||f)})}
 });
 
