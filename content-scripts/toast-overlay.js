@@ -113,6 +113,17 @@
       URL.revokeObjectURL(a.href);
     };
 
+    // --- "Copy for AI" button: picks a prompt template and copies prompt + markdown ---
+    var aiBtn = document.createElement('button');
+    aiBtn.setAttribute('data-button', '');
+    aiBtn.textContent = 'Copy for AI';
+    aiBtn.onclick = function (event) {
+      event.stopPropagation();
+      // Keep the toast open while the user is choosing a template
+      clearTimeout(toast._autoTimer);
+      togglePromptMenu(toast, aiBtn, markdown);
+    };
+
     // --- assemble in Sonner order: icon, content, buttons, close ---
     toast.appendChild(icon);
     toast.appendChild(content);
@@ -130,6 +141,7 @@
       toast.appendChild(copyBtn);
     } else {
       toast.appendChild(copyBtn);
+      toast.appendChild(aiBtn);
       toast.appendChild(saveBtn);
     }
     toast.appendChild(closeBtn);
@@ -147,7 +159,93 @@
     toast._autoTimer = autoTimer;
   }
 
+  // Default templates; the user edits them on the options page (key cpdownPromptTemplates).
+  var DEFAULT_PROMPT_TEMPLATES = [
+    { name: 'Краткий конспект', text: 'Сделай краткий конспект этого видео по пунктам.' },
+    { name: '5 главных мыслей', text: 'Выдели 5 главных мыслей из этого видео и кратко поясни каждую.' },
+    { name: 'План статьи', text: 'Составь подробный план статьи по материалам этого видео.' },
+    { name: 'Перевод на русский', text: 'Переведи этот текст на русский язык, сохранив смысл и структуру.' }
+  ];
+
+  function loadPromptTemplates(callback) {
+    try {
+      chrome.storage.sync.get('cpdownPromptTemplates', function (data) {
+        var list = data && data.cpdownPromptTemplates;
+        callback(Array.isArray(list) && list.length ? list : DEFAULT_PROMPT_TEMPLATES);
+      });
+    } catch (e) {
+      callback(DEFAULT_PROMPT_TEMPLATES);
+    }
+  }
+
+  function closePromptMenu() {
+    var menu = document.getElementById('cpdown-prompt-menu');
+    if (menu) menu.remove();
+    document.removeEventListener('click', closePromptMenu);
+  }
+
+  function togglePromptMenu(toast, anchor, markdown) {
+    if (document.getElementById('cpdown-prompt-menu')) {
+      closePromptMenu();
+      return;
+    }
+    loadPromptTemplates(function (templates) {
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var menu = document.createElement('div');
+      menu.id = 'cpdown-prompt-menu';
+      var rect = anchor.getBoundingClientRect();
+      menu.style.cssText =
+        'position:fixed;z-index:2147483647;min-width:220px;max-width:320px;padding:4px;' +
+        'border-radius:8px;font:13px/1.4 system-ui,-apple-system,sans-serif;' +
+        'box-shadow:0 4px 16px rgba(0,0,0,.25);' +
+        'top:' + Math.round(rect.bottom + 6) + 'px;' +
+        'right:' + Math.max(8, Math.round(window.innerWidth - rect.right)) + 'px;' +
+        (dark ? 'background:#1f1f1f;color:#ededed;border:1px solid #333;'
+              : 'background:#fff;color:#171717;border:1px solid #e5e5e5;');
+
+      var hint = document.createElement('div');
+      hint.textContent = 'Choose a prompt:';
+      hint.style.cssText = 'padding:4px 8px;opacity:.6;font-size:12px;';
+      menu.appendChild(hint);
+
+      templates.forEach(function (template) {
+        var item = document.createElement('button');
+        item.textContent = template.name || 'Untitled';
+        item.title = template.text || '';
+        item.style.cssText =
+          'display:block;width:100%;text-align:left;padding:6px 8px;border:0;border-radius:6px;' +
+          'background:transparent;color:inherit;font:inherit;cursor:pointer;';
+        item.onmouseenter = function () { item.style.background = dark ? '#2e2e2e' : '#f2f2f2'; };
+        item.onmouseleave = function () { item.style.background = 'transparent'; };
+        item.onclick = function (event) {
+          event.stopPropagation();
+          closePromptMenu();
+          var text = (template.text ? template.text.trim() + '\n\n' : '') + markdown;
+          navigator.clipboard.writeText(text).then(function () {
+            anchor.textContent = 'Copied!';
+          }).catch(function () {
+            anchor.textContent = 'Failed';
+          });
+          setTimeout(function () { anchor.textContent = 'Copy for AI'; }, 2000);
+          toast._autoTimer = setTimeout(function () { closeToast(toast); }, 15000);
+        };
+        menu.appendChild(item);
+      });
+
+      var edit = document.createElement('div');
+      edit.textContent = 'Edit templates in cpdown options';
+      edit.style.cssText = 'padding:6px 8px 4px;opacity:.6;font-size:11px;border-top:1px solid ' +
+        (dark ? '#333' : '#eee') + ';margin-top:4px;';
+      menu.appendChild(edit);
+
+      menu.onclick = function (event) { event.stopPropagation(); };
+      document.body.appendChild(menu);
+      setTimeout(function () { document.addEventListener('click', closePromptMenu); }, 0);
+    });
+  }
+
   function closeToast(toast) {
+    closePromptMenu();
     if (!toast || !toast.parentNode) return;
     clearTimeout(toast._autoTimer);
     toast.setAttribute('data-removed', 'true');
