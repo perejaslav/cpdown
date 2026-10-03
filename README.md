@@ -82,6 +82,12 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.9
+
+- **New:** **Copy for AI** button in the YouTube subtitles toast — choose a prompt template and copy prompt + transcript in one click
+- **New:** Prompt templates editor on the options page (add, edit, delete, reset to defaults); templates sync via `chrome.storage.sync`
+- **Default templates:** short summary, 5 key ideas, full article in Russian (keeps all facts), translation to Russian
+
 ### v1.8.1
 
 - **Fix:** Right-click "Copy subtitles" copied only the video title — captions are now fetched via the Android player API when the web request returns empty, with the transcript panel API as a last resort
@@ -146,4 +152,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.8.1**
+**v1.9**

@@ -34,8 +34,8 @@
    },
    "permissions": [ "activeTab", "clipboardWrite", "contextMenus", "scripting", "storage" ],
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "1.8.1",
-   "version_name": "1.8.1",
+   "version": "1.9",
+   "version_name": "1.9",
    "web_accessible_resources": [ {
       "matches": [ "*://*.youtube.com/*" ],
       "resources": [ "youtube-main-world.js" ]
