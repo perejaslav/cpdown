@@ -71,7 +71,9 @@
     // Method 1: timedtext (the original method)
     if (captionTracks && captionTracks.length > 0) {
       try {
-        var srtUrl = captionTracks[0].baseUrl + '&fmt=srt&c=WEB' + (pot ? '&pot=' + encodeURIComponent(pot) : '');
+        var webTrack = pickTrack(captionTracks);
+        log('timedtext: track ' + describeTrack(webTrack));
+        var srtUrl = cleanTrackUrl(webTrack.baseUrl) + '&fmt=srt&c=WEB' + (pot ? '&pot=' + encodeURIComponent(pot) : '');
         var response = await fetch(srtUrl);
         var srtText = await response.text();
         log('timedtext: HTTP ' + response.status + ', ' + srtText.length + ' chars');
@@ -183,7 +185,7 @@
       credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38', hl: 'en' } },
+        context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38' } },
         videoId: videoId
       })
     });
@@ -195,11 +197,44 @@
     log('android: caption tracks: ' + (tracks ? tracks.length : 0) +
       (data && data.playabilityStatus ? ', status ' + data.playabilityStatus.status : ''));
     if (!tracks || tracks.length === 0) return '';
-    var trackUrl = tracks[0].baseUrl.replace(/&fmt=[^&]*/, '');
+    var track = pickTrack(tracks);
+    log('android: track ' + describeTrack(track));
+    var trackUrl = cleanTrackUrl(track.baseUrl);
     var res = await fetch(trackUrl, { credentials: 'omit' });
     var xml = await res.text();
     log('android: timedtext HTTP ' + res.status + ', ' + xml.length + ' chars');
     return xmlToText(xml);
+  }
+
+  // Picks the track in the language spoken in the video:
+  // the auto-generated (asr) track tells the spoken language;
+  // a manual track in that language is preferred over the asr one.
+  function pickTrack(tracks) {
+    var asr = null;
+    for (var i = 0; i < tracks.length; i++) {
+      if (tracks[i].kind === 'asr') { asr = tracks[i]; break; }
+    }
+    if (asr) {
+      var spoken = baseLang(asr.languageCode);
+      for (var j = 0; j < tracks.length; j++) {
+        if (tracks[j].kind !== 'asr' && baseLang(tracks[j].languageCode) === spoken) return tracks[j];
+      }
+      return asr;
+    }
+    return tracks[0];
+  }
+
+  function baseLang(code) {
+    return String(code || '').toLowerCase().split('-')[0];
+  }
+
+  function describeTrack(track) {
+    return (track.languageCode || '?') + (track.kind === 'asr' ? ' (auto)' : '');
+  }
+
+  // Drops format and auto-translation parameters from a caption track URL.
+  function cleanTrackUrl(url) {
+    return url.replace(/&(fmt|tlang)=[^&]*/g, '');
   }
 
   // Parses YouTube timedtext XML (<text> in format 1, <p> in format 3).
