@@ -180,7 +180,8 @@
     { id: 'chatgpt', name: 'ChatGPT', short: 'GPT', url: 'https://chatgpt.com/' },
     { id: 'claude', name: 'Claude', short: 'Claude', url: 'https://claude.ai/new' },
     { id: 'qwen', name: 'Qwen', short: 'Qwen', url: 'https://chat.qwen.ai/' },
-    { id: 'deepseek', name: 'DeepSeek', short: 'DS', url: 'https://chat.deepseek.com/' }
+    { id: 'deepseek', name: 'DeepSeek', short: 'DS', url: 'https://chat.deepseek.com/' },
+    { id: 'gemini', name: 'Gemini', short: 'Gemini', url: 'https://gemini.google.com/app' }
   ];
 
   function loadPromptTemplates(callback) {

@@ -82,6 +82,10 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.13
+
+- **New:** **Gemini** button in the Copy for AI menu (opens gemini.google.com). If you saved the AI site checkboxes before, enable Gemini on the options page
+
 ### v1.12
 
 - **New:** Right-click menu **Copy selection for AI** — converts the selected text to Markdown and opens the Copy for AI menu right away
