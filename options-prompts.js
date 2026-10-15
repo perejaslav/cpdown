@@ -12,7 +12,8 @@
     { id: 'chatgpt', name: 'ChatGPT' },
     { id: 'claude', name: 'Claude' },
     { id: 'qwen', name: 'Qwen' },
-    { id: 'deepseek', name: 'DeepSeek' }
+    { id: 'deepseek', name: 'DeepSeek' },
+    { id: 'gemini', name: 'Gemini' }
   ];
 
   var style = document.createElement('style');
