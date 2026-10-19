@@ -2,6 +2,66 @@
   if (window.__cpdownToastInjected) return;
   window.__cpdownToastInjected = true;
 
+  // The toast lives in a shadow root, so page styles don't leak in and ours don't leak out.
+  var TOAST_CSS =
+    ':host{all:initial}' +
+    '.toast{--bg:#fff;--fg:#111214;--muted:#6b6f78;--line:#e7e8eb;--soft:#f4f5f6;--acc:#111214;--acc-fg:#fff;--ok:#2fa36b;--err:#d33c3c;' +
+    'position:fixed;top:24px;right:24px;z-index:2147483647;width:380px;max-width:calc(100vw - 32px);box-sizing:border-box;' +
+    'display:flex;flex-direction:column;gap:12px;padding:14px;border-radius:12px;background:var(--bg);color:var(--fg);' +
+    'border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.14);font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;' +
+    'animation:in .25s ease-out;transition:opacity .2s,transform .2s}' +
+    '.toast.dark{--bg:#1b1c20;--fg:#f0f1f3;--muted:#989ca6;--line:#2e3036;--soft:#26282d;--acc:#f0f1f3;--acc-fg:#141518;--err:#ff7b7b;box-shadow:0 10px 30px rgba(0,0,0,.5)}' +
+    '.toast.out{opacity:0;transform:translateY(-8px)}' +
+    '@keyframes in{from{opacity:0;transform:translateY(-8px)}}' +
+    '@media (prefers-reduced-motion:reduce){.toast{animation:none;transition:none}}' +
+    '.head{display:flex;gap:10px;align-items:flex-start}' +
+    '.mark{flex:none;width:22px;height:22px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center}' +
+    '.toast.error .mark{background:var(--err)}' +
+    '.text{flex:1;min-width:0}' +
+    '.title{font-weight:600;font-size:14px}' +
+    '.sub{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}' +
+    '.toast.error .sub{color:var(--fg)}' +
+    'button{font:inherit;color:inherit;cursor:pointer;margin:0}' +
+    'button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}' +
+    '.close{flex:none;width:24px;height:24px;border:0;border-radius:6px;background:none;color:var(--muted);display:grid;place-items:center;padding:0}' +
+    '.close:hover{background:var(--soft);color:var(--fg)}' +
+    '.btns{display:flex;gap:6px;flex-wrap:wrap}' +
+    '.btn{font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg)}' +
+    '.btn:hover{background:var(--soft)}' +
+    '.btn.primary{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}' +
+    '.btn.primary:hover{opacity:.88}' +
+    '.menu{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:1px}' +
+    '.hint{color:var(--muted);font-size:12px;padding:0 4px 4px}' +
+    '.item{display:flex;align-items:center;gap:4px;padding:2px 4px;border-radius:6px}' +
+    '.item:hover{background:var(--soft)}' +
+    '.name{flex:1;min-width:0;text-align:left;border:0;background:none;padding:5px 0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.site{flex:none;min-width:24px;height:22px;padding:0 5px;border:0;border-radius:6px;color:#fff;font-size:10px;font-weight:700;letter-spacing:.02em}' +
+    '.site:hover{filter:brightness(1.12)}' +
+    '.foot{color:var(--muted);font-size:11.5px;padding:6px 4px 0}';
+
+  var ICON_OK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  var ICON_ERR = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><line x1="12" y1="6" x2="12" y2="13"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>';
+  var ICON_X = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function isDark() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+
+  // Shows a short label on a button, then puts the original text back
+  function flashLabel(button, label, ms) {
+    if (!button._label) button._label = button.textContent;
+    button.textContent = label;
+    clearTimeout(button._flashTimer);
+    button._flashTimer = setTimeout(function () { button.textContent = button._label; }, ms || 2000);
+  }
+
   function showOverlay(payload) {
     var isError = !!payload.error;
     var markdown = payload.markdown;
@@ -9,162 +69,118 @@
     var tokenCount = payload.tokenCount || Math.ceil((markdown || '').length / 4);
 
     // Remove previous cpdown toast if any
-    var old = document.querySelector('[data-sonner-toast][data-cpdown="transcript"]');
+    var old = document.getElementById('cpdown-toast-root');
     if (old) old.remove();
 
-    // ---------- build toaster root (separate from React-controlled Sonner) ----------
-    var root = document.getElementById('cpdown-toast-root');
-    if (!root) {
-      root = document.createElement('ol');
-      root.id = 'cpdown-toast-root';
-      root.setAttribute('data-sonner-toaster', '');
-      root.setAttribute('data-sonner-theme',
-        window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      root.setAttribute('data-x-position', 'right');
-      root.setAttribute('data-y-position', 'top');
-      root.setAttribute('dir', 'ltr');
-      root.style.setProperty('--width', '356px');
-      root.style.setProperty('--gap', '14px');
-      root.style.setProperty('--offset-right', '24px');
-      root.style.setProperty('--offset-top', '24px');
-      document.body.appendChild(root);
-    }
+    var host = document.createElement('div');
+    host.id = 'cpdown-toast-root';
+    var shadow = host.attachShadow({ mode: 'open' });
+    var style = document.createElement('style');
+    style.textContent = TOAST_CSS;
+    shadow.appendChild(style);
 
-    // ---------- build toast <li> matching Sonner's exact DOM structure ----------
-    var toast = document.createElement('li');
-    toast.setAttribute('data-sonner-toast', '');
-    toast.setAttribute('data-rich-colors', 'true');
-    toast.setAttribute('data-type', isError ? 'error' : 'success');
-    toast.setAttribute('data-styled', 'true');
-    toast.setAttribute('data-mounted', 'true');
-    toast.setAttribute('data-promise', 'false');
-    toast.setAttribute('data-removed', 'false');
-    toast.setAttribute('data-visible', 'true');
-    toast.setAttribute('data-y-position', 'top');
-    toast.setAttribute('data-x-position', 'right');
-    toast.setAttribute('data-index', '0');
-    toast.setAttribute('data-front', 'true');
-    toast.setAttribute('data-swiping', 'false');
-    toast.setAttribute('data-dismissible', 'true');
-    toast.setAttribute('data-cpdown', 'transcript');
+    var toast = el('div', 'toast' + (isDark() ? ' dark' : '') + (isError ? ' error' : ''));
+    toast.setAttribute('role', isError ? 'alert' : 'status');
+    toast._host = host;
 
-    // --- icon (success checkmark, Sonner's default SVG) ---
-    var icon = document.createElement('div');
-    icon.setAttribute('data-icon', '');
-    icon.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
-
-    // --- content ---
-    var content = document.createElement('div');
-    content.setAttribute('data-content', '');
-
-    var titleEl = document.createElement('div');
-    titleEl.setAttribute('data-title', '');
-    var prefix = payload.kind === 'page' ? 'Markdown ready: '
-      : payload.kind === 'selection' ? 'Selection ready: ' : 'Transcript ready: ';
-    titleEl.textContent = isError
-      ? 'cpdown: ' + payload.error
-      : prefix + title + ' (' + tokenCount.toLocaleString() + ' tokens' +
-        (payload.removedLines ? ', removed ' + payload.removedLines + ' junk lines' : '') + ')';
-    if (isError) {
-      icon.innerHTML =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
-    }
-
-    content.appendChild(titleEl);
-
-    // --- close button (Sonner data-close-button) ---
-    var closeBtn = document.createElement('button');
-    closeBtn.setAttribute('data-close-button', '');
-    closeBtn.setAttribute('aria-label', 'Close');
-    closeBtn.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    // --- head: icon, title, details, close ---
+    var head = el('div', 'head');
+    var mark = el('span', 'mark');
+    mark.innerHTML = isError ? ICON_ERR : ICON_OK;
+    var text = el('div', 'text');
+    var heading = payload.kind === 'page' ? 'Markdown готов'
+      : payload.kind === 'selection' ? 'Выделение готово' : 'Субтитры готовы';
+    var details = [title, tokenCount.toLocaleString('ru-RU') + ' токенов'];
+    if (payload.removedLines) details.push('убрано строк мусора: ' + payload.removedLines);
+    text.appendChild(el('div', 'title', isError ? 'cpdown: ошибка' : heading));
+    text.appendChild(el('div', 'sub', isError ? payload.error : details.join(' · ')));
+    var closeBtn = el('button', 'close');
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Закрыть');
+    closeBtn.innerHTML = ICON_X;
     closeBtn.onclick = function () { closeToast(toast); };
+    head.appendChild(mark);
+    head.appendChild(text);
+    head.appendChild(closeBtn);
+    toast.appendChild(head);
 
-    // --- Copy button ---
-    var copyBtn = document.createElement('button');
-    copyBtn.setAttribute('data-button', '');
-    copyBtn.textContent = 'Copy';
-    copyBtn.onclick = function () {
-      navigator.clipboard.writeText(markdown).then(function () {
-        copyBtn.textContent = 'Copied!';
-        setTimeout(function () { copyBtn.textContent = 'Copy'; }, 2000);
-      }).catch(function () {
-        copyBtn.textContent = 'Failed';
-        setTimeout(function () { copyBtn.textContent = 'Copy'; }, 2000);
-      });
-    };
+    // --- buttons ---
+    var btns = el('div', 'btns');
+    toast.appendChild(btns);
 
-    // --- Save .md button (secondary style via data-cancel) ---
-    var saveBtn = document.createElement('button');
-    saveBtn.setAttribute('data-button', '');
-    saveBtn.setAttribute('data-cancel', '');
-    saveBtn.textContent = 'Save .md';
-    saveBtn.onclick = function () {
-      var safeName = (title || 'transcript')
-        .replace(/[/\\?%*:|"<>]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 120) || 'transcript';
-      var blob = new Blob([markdown], { type: 'text/markdown' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = safeName + '.md';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(a.href);
-    };
-
-    // --- "Copy for AI" button: picks a prompt template and copies prompt + markdown ---
-    var aiBtn = document.createElement('button');
-    aiBtn.setAttribute('data-button', '');
-    aiBtn.textContent = 'Copy for AI';
-    aiBtn.onclick = function (event) {
-      event.stopPropagation();
-      // Keep the toast open while the user is choosing a template
-      clearTimeout(toast._autoTimer);
-      togglePromptMenu(toast, aiBtn, markdown);
-    };
-
-    // --- assemble in Sonner order: icon, content, buttons, close ---
-    toast.appendChild(icon);
-    toast.appendChild(content);
     if (isError) {
       // "Copy log" puts the error and the step log into the clipboard for a bug report
-      copyBtn.textContent = 'Copy log';
-      copyBtn.onclick = function () {
+      var logBtn = el('button', 'btn', 'Скопировать лог');
+      logBtn.type = 'button';
+      logBtn.onclick = function () {
         var log = 'cpdown error: ' + payload.error + '\n' + (payload.debug || []).join('\n');
         navigator.clipboard.writeText(log).then(function () {
-          copyBtn.textContent = 'Copied!';
+          flashLabel(logBtn, 'Скопировано!');
         }).catch(function () {
-          copyBtn.textContent = 'Failed';
+          flashLabel(logBtn, 'Не получилось');
         });
       };
-      toast.appendChild(copyBtn);
+      btns.appendChild(logBtn);
     } else {
-      toast.appendChild(copyBtn);
-      toast.appendChild(aiBtn);
-      toast.appendChild(saveBtn);
-    }
-    toast.appendChild(closeBtn);
-    root.appendChild(toast);
+      var copyBtn = el('button', 'btn', 'Копировать');
+      copyBtn.type = 'button';
+      copyBtn.onclick = function () {
+        navigator.clipboard.writeText(markdown).then(function () {
+          flashLabel(copyBtn, 'Скопировано!');
+        }).catch(function () {
+          flashLabel(copyBtn, 'Не получилось');
+        });
+      };
 
-    // Trigger mount animation — set heights Sonner expects
-    requestAnimationFrame(function () {
-      var h = toast.offsetHeight + 'px';
-      toast.style.setProperty('--initial-height', h);
-      toast.style.setProperty('--front-toast-height', h);
-    });
+      // "Copy for AI": picks a prompt template and copies prompt + markdown
+      var aiBtn = el('button', 'btn primary', 'Copy for AI ▾');
+      aiBtn.type = 'button';
+      aiBtn.setAttribute('aria-expanded', 'false');
+      aiBtn.onclick = function () {
+        // Keep the toast open while the user is choosing a template
+        clearTimeout(toast._autoTimer);
+        togglePromptMenu(toast, aiBtn, markdown);
+      };
+
+      var saveBtn = el('button', 'btn', 'Сохранить .md');
+      saveBtn.type = 'button';
+      saveBtn.onclick = function () {
+        var safeName = (title || 'transcript')
+          .replace(/[/\\?%*:|"<>]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 120) || 'transcript';
+        var blob = new Blob([markdown], { type: 'text/markdown' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = safeName + '.md';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      };
+
+      btns.appendChild(copyBtn);
+      btns.appendChild(aiBtn);
+      btns.appendChild(saveBtn);
+    }
+
+    shadow.appendChild(toast);
+    document.documentElement.appendChild(host);
+
+    // Hovering keeps the toast open; leaving restarts the timer
+    var delay = isError ? 60000 : 15000;
+    toast.onmouseenter = function () { clearTimeout(toast._autoTimer); };
+    toast.onmouseleave = function () {
+      if (toast.querySelector('.menu')) return;
+      toast._autoTimer = setTimeout(function () { closeToast(toast); }, delay);
+    };
+    toast._autoTimer = setTimeout(function () { closeToast(toast); }, delay);
 
     // "Copy selection for AI" opens the template menu right away
     if (payload.openAiMenu && !isError) {
       setTimeout(function () { aiBtn.click(); }, 50);
     }
-
-    // Auto-dismiss after 15 s
-    var autoTimer = setTimeout(function () { closeToast(toast); }, isError ? 60000 : 15000);
-    toast._autoTimer = autoTimer;
   }
 
   // Default templates; the user edits them on the options page (key cpdownPromptTemplates).
@@ -177,11 +193,11 @@
 
   // AI sites for "copy and open"; the user picks which ones are shown (key cpdownAiSites).
   var AI_SITES = [
-    { id: 'chatgpt', name: 'ChatGPT', short: 'GPT', url: 'https://chatgpt.com/' },
-    { id: 'claude', name: 'Claude', short: 'Claude', url: 'https://claude.ai/new' },
-    { id: 'qwen', name: 'Qwen', short: 'Qwen', url: 'https://chat.qwen.ai/' },
-    { id: 'deepseek', name: 'DeepSeek', short: 'DS', url: 'https://chat.deepseek.com/' },
-    { id: 'gemini', name: 'Gemini', short: 'Gemini', url: 'https://gemini.google.com/app' }
+    { id: 'chatgpt', name: 'ChatGPT', short: 'GPT', color: '#10a37f', url: 'https://chatgpt.com/' },
+    { id: 'claude', name: 'Claude', short: 'C', color: '#c96442', url: 'https://claude.ai/new' },
+    { id: 'qwen', name: 'Qwen', short: 'Q', color: '#615ced', url: 'https://chat.qwen.ai/' },
+    { id: 'deepseek', name: 'DeepSeek', short: 'DS', color: '#4d6bfe', url: 'https://chat.deepseek.com/' },
+    { id: 'gemini', name: 'Gemini', short: 'G', color: '#1a73e8', url: 'https://gemini.google.com/app' }
   ];
 
   function loadPromptTemplates(callback) {
@@ -200,66 +216,40 @@
     }
   }
 
-  function closePromptMenu() {
-    var menu = document.getElementById('cpdown-prompt-menu');
+  function closePromptMenu(toast) {
+    var menu = toast && toast.querySelector('.menu');
     if (menu) menu.remove();
-    document.removeEventListener('click', closePromptMenu);
+    var aiBtn = toast && toast.querySelector('[aria-expanded]');
+    if (aiBtn) aiBtn.setAttribute('aria-expanded', 'false');
   }
 
+  // The menu opens inside the toast, under the buttons
   function togglePromptMenu(toast, anchor, markdown) {
-    if (document.getElementById('cpdown-prompt-menu')) {
-      closePromptMenu();
+    if (toast.querySelector('.menu')) {
+      closePromptMenu(toast);
       return;
     }
     loadPromptTemplates(function (templates, sites) {
-      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var menu = document.createElement('div');
-      menu.id = 'cpdown-prompt-menu';
-      var rect = anchor.getBoundingClientRect();
-      menu.style.cssText =
-        'position:fixed;z-index:2147483647;min-width:240px;max-width:420px;padding:4px;' +
-        'border-radius:8px;font:13px/1.4 system-ui,-apple-system,sans-serif;' +
-        'box-shadow:0 4px 16px rgba(0,0,0,.25);' +
-        'top:' + Math.round(rect.bottom + 6) + 'px;' +
-        'right:' + Math.max(8, Math.round(window.innerWidth - rect.right)) + 'px;' +
-        (dark ? 'background:#1f1f1f;color:#ededed;border:1px solid #333;'
-              : 'background:#fff;color:#171717;border:1px solid #e5e5e5;');
-
-      var hint = document.createElement('div');
-      hint.textContent = sites.length ? 'Choose a prompt (name = copy, button = copy and open):' : 'Choose a prompt:';
-      hint.style.cssText = 'padding:4px 8px;opacity:.6;font-size:12px;';
-      menu.appendChild(hint);
+      var menu = el('div', 'menu');
+      menu.appendChild(el('div', 'hint', sites.length
+        ? 'Название копирует, значок копирует и открывает чат'
+        : 'Выберите промпт'));
 
       templates.forEach(function (template) {
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:2px;border-radius:6px;';
-        row.onmouseenter = function () { row.style.background = dark ? '#2e2e2e' : '#f2f2f2'; };
-        row.onmouseleave = function () { row.style.background = 'transparent'; };
-
-        var item = document.createElement('button');
-        item.textContent = template.name || 'Untitled';
-        item.title = 'Copy: ' + (template.text || '');
-        item.style.cssText =
-          'flex:1;min-width:0;text-align:left;padding:6px 8px;border:0;border-radius:6px;' +
-          'background:transparent;color:inherit;font:inherit;cursor:pointer;' +
-          'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-        item.onclick = function (event) {
-          event.stopPropagation();
-          copyWithPrompt(template, null);
-        };
+        var row = el('div', 'item');
+        var item = el('button', 'name', template.name || 'Без названия');
+        item.type = 'button';
+        item.title = 'Скопировать: ' + (template.text || '');
+        item.onclick = function () { copyWithPrompt(template, null); };
         row.appendChild(item);
 
         sites.forEach(function (site) {
-          var siteBtn = document.createElement('button');
-          siteBtn.textContent = site.short;
-          siteBtn.title = 'Copy and open ' + site.name;
-          siteBtn.style.cssText =
-            'flex:none;padding:3px 6px;border-radius:4px;font:inherit;font-size:11px;cursor:pointer;' +
-            'background:transparent;color:inherit;border:1px solid ' + (dark ? '#444' : '#d4d4d4') + ';';
-          siteBtn.onclick = function (event) {
-            event.stopPropagation();
-            copyWithPrompt(template, site);
-          };
+          var siteBtn = el('button', 'site', site.short);
+          siteBtn.type = 'button';
+          siteBtn.style.background = site.color;
+          siteBtn.title = 'Скопировать и открыть ' + site.name;
+          siteBtn.setAttribute('aria-label', siteBtn.title);
+          siteBtn.onclick = function () { copyWithPrompt(template, site); };
           row.appendChild(siteBtn);
         });
         menu.appendChild(row);
@@ -267,40 +257,32 @@
 
       // Copies prompt + markdown; with a site, also opens it in a new tab (paste with Ctrl+V)
       function copyWithPrompt(template, site) {
-        closePromptMenu();
+        closePromptMenu(toast);
         // Open the tab synchronously inside the click so the popup blocker allows it
         if (site) window.open(site.url, '_blank', 'noopener');
         var text = (template.text ? template.text.trim() + '\n\n' : '') + markdown;
         navigator.clipboard.writeText(text).then(function () {
-          anchor.textContent = site ? 'Copied, paste with Ctrl+V' : 'Copied!';
+          flashLabel(anchor, site ? 'Скопировано, вставьте Ctrl+V' : 'Скопировано!', site ? 4000 : 2000);
         }).catch(function () {
-          anchor.textContent = 'Failed';
+          flashLabel(anchor, 'Не получилось');
         });
-        setTimeout(function () { anchor.textContent = 'Copy for AI'; }, site ? 4000 : 2000);
+        clearTimeout(toast._autoTimer);
         toast._autoTimer = setTimeout(function () { closeToast(toast); }, 15000);
       }
 
-      var edit = document.createElement('div');
-      edit.textContent = 'Edit templates in cpdown options';
-      edit.style.cssText = 'padding:6px 8px 4px;opacity:.6;font-size:11px;border-top:1px solid ' +
-        (dark ? '#333' : '#eee') + ';margin-top:4px;';
-      menu.appendChild(edit);
-
-      menu.onclick = function (event) { event.stopPropagation(); };
-      document.body.appendChild(menu);
-      setTimeout(function () { document.addEventListener('click', closePromptMenu); }, 0);
+      menu.appendChild(el('div', 'foot', 'Шаблоны и чаты меняются в настройках cpdown'));
+      toast.appendChild(menu);
+      anchor.setAttribute('aria-expanded', 'true');
     });
   }
 
   function closeToast(toast) {
-    closePromptMenu();
-    if (!toast || !toast.parentNode) return;
+    if (!toast || !toast._host || !toast._host.parentNode) return;
     clearTimeout(toast._autoTimer);
-    toast.setAttribute('data-removed', 'true');
-    toast.removeAttribute('data-visible');
+    toast.classList.add('out');
     setTimeout(function () {
-      if (toast.parentNode) toast.remove();
-    }, 300);
+      if (toast._host.parentNode) toast._host.remove();
+    }, 220);
   }
 
   // Junk cleanup for regular pages; settings are edited on the options page.

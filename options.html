@@ -1,16 +1,91 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cpdown options</title>
-    <meta name="manifest.type" content="browser_action">
-    <script src="/options-theme.js"></script>
-    <script src="/options-prompts.js" defer></script>
-    <script type="module" crossorigin src="/chunks/options-ChfjUtXM.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/options-C-cz_1xn.css">
+    <title>Настройки cpdown</title>
+    <link rel="stylesheet" href="/options.css">
+    <script src="/options.js" defer></script>
   </head>
   <body>
-    <div id="root"></div>
+    <header class="top">
+      <span class="logo" aria-hidden="true">md</span>
+      <b>cpdown</b>
+      <small id="version"></small>
+      <span class="saved" id="saved" aria-live="polite"><i></i><span>Сохранено</span></span>
+    </header>
+
+    <main class="page">
+      <section>
+        <h2>Копирование</h2>
+        <div class="group">
+          <label class="row">
+            <div><b>Парсер Defuddle</b><span>Другой способ вытащить основной текст со страницы. <a href="https://github.com/kepano/defuddle" target="_blank" rel="noopener">Что это</a></span></div>
+            <input type="checkbox" class="switch" id="opt-defuddle">
+          </label>
+          <label class="row">
+            <div><b>Mozilla Readability</b><span>Чище текст на статьях и блогах. Работает вместо Defuddle. <a href="https://github.com/mozilla/readability" target="_blank" rel="noopener">Что это</a></span></div>
+            <input type="checkbox" class="switch" id="opt-readability">
+          </label>
+          <label class="row">
+            <div><b>Обернуть в ```</b><span>Markdown окажется внутри блока кода</span></div>
+            <input type="checkbox" class="switch" id="opt-backticks">
+          </label>
+          <label class="row">
+            <div><b>Показывать всплывашку</b><span>Окошко с кнопками после копирования</span></div>
+            <input type="checkbox" class="switch" id="opt-toast">
+          </label>
+          <label class="row">
+            <div><b>Конфетти Raycast</b><span>Салют после копирования, нужен Raycast на Mac. Если Chrome спрашивает «Open Raycast.app?», один раз откройте raycast.com/confetti и отметьте «Always allow».</span></div>
+            <input type="checkbox" class="switch" id="opt-confetti">
+          </label>
+          <div class="row">
+            <div><b>Горячая клавиша</b><span>Скопировать страницу: <kbd id="shortcut">Ctrl+Shift+T</kbd></span></div>
+            <button type="button" class="link" id="shortcut-edit">Изменить</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Очистка мусора</h2>
+        <div class="group">
+          <label class="row">
+            <div><b>Убирать мусор</b><span>Короткие строки, которые начинаются с этих фраз, и строки из одних ссылок «поделиться». Только для обычных страниц.</span></div>
+            <input type="checkbox" class="switch" id="cleanup-enabled">
+          </label>
+          <div class="row stack">
+            <textarea id="cleanup-phrases" rows="7" spellcheck="false" aria-label="Стоп-фразы, по одной на строку"></textarea>
+            <div class="hint"><span>По одной фразе на строку</span><button type="button" class="link" id="cleanup-reset">Вернуть стандартные</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Copy for AI</h2>
+        <p class="lead">Промпт добавится перед текстом. Кнопка чата копирует всё и открывает сайт, останется нажать Ctrl+V.</p>
+        <div class="group">
+          <div class="chips" id="sites" role="group" aria-label="Чаты в меню"></div>
+        </div>
+        <div class="group" id="templates"></div>
+        <div class="hint under"><span>Перетащите за ⋮⋮, чтобы поменять порядок</span><button type="button" class="link" id="templates-reset">Вернуть стандартные</button></div>
+      </section>
+    </main>
+
+    <template id="tpl-row">
+      <div class="tpl">
+        <div class="tpl-head">
+          <span class="grip" title="Перетащить" aria-hidden="true">⋮⋮</span>
+          <button type="button" class="tpl-open">
+            <b></b>
+            <span></span>
+          </button>
+          <button type="button" class="icon del" title="Удалить шаблон" aria-label="Удалить шаблон">✕</button>
+        </div>
+        <div class="tpl-edit" hidden>
+          <input type="text" class="tpl-name" placeholder="Название, например «Краткий конспект»">
+          <textarea class="tpl-text" rows="4" placeholder="Текст промпта"></textarea>
+        </div>
+      </div>
+    </template>
   </body>
 </html>
