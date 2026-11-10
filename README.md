@@ -182,4 +182,4 @@ npm run build  # production
 
 ## 📦 Current version
 
-**v1.12**
+**v1.13.2**
