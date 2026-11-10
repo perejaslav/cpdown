@@ -82,6 +82,10 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.13.1
+
+- **Fix:** Right-click "Copy subtitles" failed with "YouTube returned empty subtitles" — the extension now waits for the player's caption token, signs the transcript request for signed-in users, and as a last resort reads the transcript panel from the page
+
 ### v1.13
 
 - **New:** **Gemini** button in the Copy for AI menu (opens gemini.google.com). If you saved the AI site checkboxes before, enable Gemini on the options page

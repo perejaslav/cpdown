@@ -16,10 +16,10 @@
 
     // Try 1: youtube-main-world.js is usually already loaded by content.js
     try {
-      playerData = await getPlayerData(3000);
+      playerData = await getPlayerData(7000);
       log('player data: from already loaded main-world script');
     } catch (firstErr) {
-      log('player data: no answer in 3s, injecting main-world script');
+      log('player data: no answer in 7s, injecting main-world script');
       await new Promise(function (resolve) {
         var s = document.createElement('script');
         s.src = chrome.runtime.getURL('youtube-main-world.js');
@@ -28,7 +28,7 @@
         (document.head || document.documentElement).appendChild(s);
       });
       try {
-        playerData = await getPlayerData(5000);
+        playerData = await getPlayerData(7000);
         log('player data: ok after injection');
       } catch (secondErr) {
         log('player data: no answer after injection');
@@ -64,7 +64,8 @@
       playerResponse.captions &&
       playerResponse.captions.playerCaptionsTracklistRenderer &&
       playerResponse.captions.playerCaptionsTracklistRenderer.captionTracks;
-    log('caption tracks: ' + (captionTracks ? captionTracks.length : 0) + ', pot: ' + (pot ? 'yes' : 'no'));
+    log('caption tracks: ' + (captionTracks ? captionTracks.length : 0) + ', pot: ' + (pot ? 'yes' : 'no') +
+      (playerData && playerData.potNote ? ' (' + playerData.potNote + ')' : ''));
 
     var plainText = '';
 
@@ -101,6 +102,15 @@
         plainText = await fetchTranscriptPanel();
       } catch (e) {
         log('transcript panel: failed: ' + (e && e.message));
+      }
+    }
+
+    // Method 4: open the transcript panel on the page and read its text
+    if (!plainText) {
+      try {
+        plainText = await readTranscriptFromPage();
+      } catch (e) {
+        log('page transcript: failed: ' + (e && e.message));
       }
     }
 
@@ -154,7 +164,14 @@
     var headers = { 'Content-Type': 'application/json', 'X-Youtube-Client-Name': '1' };
     if (context.client && context.client.clientVersion) headers['X-Youtube-Client-Version'] = context.client.clientVersion;
     if (context.client && context.client.visitorData) headers['X-Goog-Visitor-Id'] = context.client.visitorData;
-    log('transcript panel: full context ' + (cfg.context ? 'yes' : 'no'));
+    // A signed-in session must be confirmed with a SAPISIDHASH header, as the site itself does.
+    var auth = await sapisidHash();
+    if (auth) {
+      headers['Authorization'] = auth;
+      headers['X-Origin'] = location.origin;
+      headers['X-Goog-AuthUser'] = cfg.sessionIndex || '0';
+    }
+    log('transcript panel: full context ' + (cfg.context ? 'yes' : 'no') + ', signed in: ' + (auth ? 'yes' : 'no'));
     var url = '/youtubei/v1/get_transcript?prettyPrint=false' + (cfg.apiKey ? '&key=' + cfg.apiKey : '');
     var response = await fetch(url, {
       method: 'POST',
@@ -178,6 +195,46 @@
     });
     log('transcript panel: ' + segments.length + ' segments');
     return segments.join('\n');
+  }
+
+  async function sapisidHash() {
+    var match = document.cookie.match(/(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID)=([^;]+)/);
+    if (!match || !window.crypto || !crypto.subtle) return '';
+    var ts = Math.floor(Date.now() / 1000);
+    var bytes = new TextEncoder().encode(ts + ' ' + match[1] + ' ' + location.origin);
+    var digest = new Uint8Array(await crypto.subtle.digest('SHA-1', bytes));
+    var hex = '';
+    for (var i = 0; i < digest.length; i++) hex += ('0' + digest[i].toString(16)).slice(-2);
+    return 'SAPISIDHASH ' + ts + '_' + hex;
+  }
+
+  // Clicks the page's own "Show transcript" button and reads the rendered lines.
+  async function readTranscriptFromPage() {
+    var lineSelector = 'ytd-transcript-segment-renderer .segment-text, ' +
+      'transcript-segment-view-model span.yt-core-attributed-string';
+    var button = document.querySelector(
+      'ytd-video-description-transcript-section-renderer button, ' +
+      'button[aria-label="Show transcript"], button[aria-label="Показать расшифровку видео"]');
+    if (!button) {
+      log('page transcript: button not found');
+      return '';
+    }
+    button.click();
+    var lastCount = -1;
+    for (var i = 0; i < 20; i++) {
+      await new Promise(function (resolve) { setTimeout(resolve, 300); });
+      var count = document.querySelectorAll(lineSelector).length;
+      if (count > 0 && count === lastCount) break;
+      lastCount = count;
+    }
+    var nodes = document.querySelectorAll(lineSelector);
+    var lines = [];
+    for (var j = 0; j < nodes.length; j++) {
+      var line = (nodes[j].textContent || '').replace(/\s+/g, ' ').trim();
+      if (line) lines.push(line);
+    }
+    log('page transcript: ' + lines.length + ' lines');
+    return lines.join('\n');
   }
 
   async function fetchViaAndroidPlayer(videoId, playerResponseForLang) {
@@ -308,6 +365,7 @@
     var html = document.documentElement.innerHTML;
     var keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
     var versionMatch = html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/);
+    var sessionMatch = html.match(/"SESSION_INDEX":"?(\d+)/);
     var context = null;
     var at = html.indexOf('"INNERTUBE_CONTEXT":');
     if (at !== -1) {
@@ -320,6 +378,7 @@
     return {
       apiKey: keyMatch ? keyMatch[1] : '',
       clientVersion: versionMatch ? versionMatch[1] : '',
+      sessionIndex: sessionMatch ? sessionMatch[1] : '',
       context: context
     };
   }

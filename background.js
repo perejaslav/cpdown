@@ -75,7 +75,7 @@ async function _cpdownExtract(c,originalTabId){
   _cpdownLog("open hidden tab for",d);
   _cpdownSaveCtx({originalTabId:b.id,hiddenTabId:e.id});
   if(_cpdownWatchdog)clearTimeout(_cpdownWatchdog);
-  _cpdownWatchdog=setTimeout(async function(){var c=await _cpdownTakeCtx();if(!c)return;_cpdownLog("watchdog: no result in 25s");if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(x){}_cpdownShowToast(c.originalTabId,{error:"YouTube did not respond in time (25s). Please try again."})},25000);
+  _cpdownWatchdog=setTimeout(async function(){var c=await _cpdownTakeCtx();if(!c)return;_cpdownLog("watchdog: no result in 35s");if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(x){}_cpdownShowToast(c.originalTabId,{error:"YouTube did not respond in time (35s). Please try again."})},35000);
   await new Promise(function(f,g){
    var h=setTimeout(function(){R.tabs.onUpdated.removeListener(i);g(new Error("Timeout"))},15000);
    function i(j,k){if(j===e.id&&k.status==="complete"){R.tabs.onUpdated.removeListener(i);clearTimeout(h);f()}}
