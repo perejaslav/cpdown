@@ -16,6 +16,11 @@
    "content_scripts": [ {
       "js": [ "content-scripts/toast-overlay.js", "content-scripts/content.js", "content-scripts/save-selection.js" ],
       "matches": [ "*://*/*" ]
+   }, {
+      "js": [ "youtube-main-world.js" ],
+      "matches": [ "*://*.youtube.com/*" ],
+      "run_at": "document_start",
+      "world": "MAIN"
    } ],
    "description": "Copy any webpage/YouTube subtitle as clean markdown",
    "host_permissions": [ "\u003Call_urls>" ],
@@ -34,8 +39,8 @@
    },
    "permissions": [ "activeTab", "clipboardWrite", "contextMenus", "scripting", "storage" ],
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "1.13.1",
-   "version_name": "1.13.1",
+   "version": "1.13.2",
+   "version_name": "1.13.2",
    "web_accessible_resources": [ {
       "matches": [ "*://*.youtube.com/*" ],
       "resources": [ "youtube-main-world.js" ]

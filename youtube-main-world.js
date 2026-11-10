@@ -9,6 +9,7 @@
   var POT_WAIT_MS = 4000;
   var pots = {}; // videoId -> pot
   var lastPot = '';
+  var pageTranscript = ''; // body of the page's own get_transcript response
 
   function remember(url) {
     try {
@@ -31,8 +32,16 @@
   var pageFetch = window.fetch;
   if (typeof pageFetch === 'function') {
     window.fetch = function (input) {
-      try { remember(typeof input === 'string' ? input : (input && input.url) || ''); } catch (_) {}
-      return pageFetch.apply(this, arguments);
+      var url = '';
+      try { url = typeof input === 'string' ? input : (input && input.url) || ''; remember(url); } catch (_) {}
+      var result = pageFetch.apply(this, arguments);
+      if (url.indexOf('/youtubei/v1/get_transcript') !== -1) {
+        result.then(function (response) {
+          if (!response.ok) return;
+          response.clone().text().then(function (text) { pageTranscript = text; }, function () {});
+        }, function () {});
+      }
+      return result;
     };
   }
 
@@ -95,7 +104,12 @@
   }
 
   window.addEventListener('message', async function (event) {
-    if (event.source !== window || !event.data || event.data.type !== 'GET_YT_INITIAL_PLAYER_RESPONSE') return;
+    if (event.source !== window || !event.data) return;
+    if (event.data.type === 'CPDOWN_GET_PAGE_TRANSCRIPT') {
+      window.postMessage({ type: 'CPDOWN_PAGE_TRANSCRIPT', data: pageTranscript, requestId: event.data.requestId }, '*');
+      return;
+    }
+    if (event.data.type !== 'GET_YT_INITIAL_PLAYER_RESPONSE') return;
     var result = { pot: '', note: '' };
     try { result = await waitForPot(currentVideoId()); } catch (e) { result.note = 'error: ' + (e && e.message); }
     window.postMessage({

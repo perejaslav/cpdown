@@ -108,9 +108,19 @@
     // Method 4: open the transcript panel on the page and read its text
     if (!plainText) {
       try {
-        plainText = await readTranscriptFromPage();
+        plainText = await readTranscriptFromPage(document.visibilityState === 'hidden' ? 3 : 20);
       } catch (e) {
         log('page transcript: failed: ' + (e && e.message));
+      }
+    }
+
+    // Method 5: a background tab does not play video or draw panels, so YouTube
+    // gives nothing there. Show the tab for a moment and try again.
+    if (!plainText && document.visibilityState === 'hidden') {
+      try {
+        plainText = await retryInVisibleTab(captionTracks, playerResponse);
+      } catch (e) {
+        log('visible tab: failed: ' + (e && e.message));
       }
     }
 
@@ -184,15 +194,7 @@
       return '';
     }
     var data = await response.json();
-    var segments = [];
-    collect(data, function (node) {
-      var seg = node.transcriptSegmentRenderer;
-      if (seg && seg.snippet) {
-        var text = seg.snippet.simpleText ||
-          (seg.snippet.runs || []).map(function (r) { return r.text; }).join('');
-        if (text && text.trim()) segments.push(text.trim());
-      }
-    });
+    var segments = segmentsFromResponse(data);
     log('transcript panel: ' + segments.length + ' segments');
     return segments.join('\n');
   }
@@ -208,10 +210,82 @@
     return 'SAPISIDHASH ' + ts + '_' + hex;
   }
 
-  // Clicks the page's own "Show transcript" button and reads the rendered lines.
-  async function readTranscriptFromPage() {
-    var lineSelector = 'ytd-transcript-segment-renderer .segment-text, ' +
-      'transcript-segment-view-model span.yt-core-attributed-string';
+  async function retryInVisibleTab(captionTracks, playerResponse) {
+    log('visible tab: asking to show the tab');
+    chrome.runtime.sendMessage({ type: 'TRANSCRIPT_NEED_VISIBLE' });
+    for (var i = 0; i < 10 && document.visibilityState === 'hidden'; i++) {
+      await new Promise(function (resolve) { setTimeout(resolve, 300); });
+    }
+    log('visible tab: visibility=' + document.visibilityState);
+    if (document.visibilityState === 'hidden') return '';
+    var text = '';
+    if (captionTracks && captionTracks.length > 0) {
+      var data = null;
+      try { data = await getPlayerData(7000); } catch (_) {}
+      var pot = data && data.pot;
+      log('visible tab: pot: ' + (pot ? 'yes' : 'no') + (data && data.potNote ? ' (' + data.potNote + ')' : ''));
+      if (pot) {
+        var track = pickTrack(captionTracks, playerResponse.captions.playerCaptionsTracklistRenderer, originalAudioLang(playerResponse));
+        var response = await fetch(cleanTrackUrl(track.baseUrl) + '&fmt=srt&c=WEB&pot=' + encodeURIComponent(pot));
+        var srt = await response.text();
+        log('visible tab: timedtext HTTP ' + response.status + ', ' + srt.length + ' chars');
+        text = srtToText(srt);
+      }
+    }
+    if (!text) text = await readTranscriptFromPage(20);
+    return text;
+  }
+
+  // The response to the page's own transcript request, caught by youtube-main-world.js.
+  function getCapturedTranscript() {
+    return new Promise(function (resolve) {
+      var requestId = 'tr_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      function handler(event) {
+        if (event.source === window && event.data && event.data.type === 'CPDOWN_PAGE_TRANSCRIPT' &&
+            event.data.requestId === requestId) {
+          window.removeEventListener('message', handler);
+          resolve(event.data.data || '');
+        }
+      }
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'CPDOWN_GET_PAGE_TRANSCRIPT', requestId: requestId }, '*');
+      setTimeout(function () { window.removeEventListener('message', handler); resolve(''); }, 500);
+    });
+  }
+
+  function segmentsFromResponse(data) {
+    var segments = [];
+    collect(data, function (node) {
+      var seg = node.transcriptSegmentRenderer;
+      if (seg && seg.snippet) {
+        var text = seg.snippet.simpleText ||
+          (seg.snippet.runs || []).map(function (r) { return r.text; }).join('');
+        if (text && text.trim()) segments.push(text.trim());
+      }
+    });
+    return segments;
+  }
+
+  function transcriptLinesFromDom() {
+    var lines = [];
+    var old = document.querySelectorAll('ytd-transcript-segment-renderer .segment-text');
+    for (var i = 0; i < old.length; i++) lines.push(old[i].textContent || '');
+    var items = document.querySelectorAll('transcript-segment-view-model');
+    for (var j = 0; j < items.length; j++) {
+      var textNode = items[j].querySelector('.ytAttributedStringHost, .yt-core-attributed-string, span[role="text"]');
+      if (textNode) { lines.push(textNode.textContent || ''); continue; }
+      // Unknown markup: take everything except the timestamp.
+      var copy = items[j].cloneNode(true);
+      var stamps = copy.querySelectorAll('[class*="imestamp"]');
+      for (var k = 0; k < stamps.length; k++) stamps[k].remove();
+      lines.push(copy.textContent || '');
+    }
+    return lines.map(function (l) { return l.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+  }
+
+  // Clicks the page's own "Show transcript" button, then takes the text either
+  // from the page's own network response or from the rendered lines.
+  async function readTranscriptFromPage(maxPolls) {
     var button = document.querySelector(
       'ytd-video-description-transcript-section-renderer button, ' +
       'button[aria-label="Show transcript"], button[aria-label="Показать расшифровку видео"]');
@@ -220,20 +294,22 @@
       return '';
     }
     button.click();
-    var lastCount = -1;
-    for (var i = 0; i < 20; i++) {
+    var lastCount = -1, lines = [];
+    for (var i = 0; i < maxPolls; i++) {
       await new Promise(function (resolve) { setTimeout(resolve, 300); });
-      var count = document.querySelectorAll(lineSelector).length;
-      if (count > 0 && count === lastCount) break;
-      lastCount = count;
+      var captured = await getCapturedTranscript();
+      if (captured) {
+        var segments = [];
+        try { segments = segmentsFromResponse(JSON.parse(captured)); } catch (_) {}
+        log('page transcript: caught page response, ' + captured.length + ' chars, ' + segments.length + ' segments');
+        if (segments.length) return segments.join('\n');
+      }
+      lines = transcriptLinesFromDom();
+      if (lines.length > 0 && lines.length === lastCount) break;
+      lastCount = lines.length;
     }
-    var nodes = document.querySelectorAll(lineSelector);
-    var lines = [];
-    for (var j = 0; j < nodes.length; j++) {
-      var line = (nodes[j].textContent || '').replace(/\s+/g, ' ').trim();
-      if (line) lines.push(line);
-    }
-    log('page transcript: ' + lines.length + ' lines');
+    log('page transcript: ' + lines.length + ' lines on the page, items: ' +
+      document.querySelectorAll('ytd-transcript-segment-renderer, transcript-segment-view-model').length);
     return lines.join('\n');
   }
 

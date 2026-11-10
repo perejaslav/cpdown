@@ -30,12 +30,20 @@ function _cpdownLog(){try{console.log.apply(console,["[cpdown]"].concat([].slice
 function _cpdownSaveCtx(c){_cpdownPendingCtx=c;try{R.storage.session.set({cpdownPendingCtx:c})}catch(e){}}
 async function _cpdownTakeCtx(){var c=_cpdownPendingCtx;_cpdownPendingCtx=null;if(_cpdownWatchdog){clearTimeout(_cpdownWatchdog);_cpdownWatchdog=null}if(!c){try{var st=await R.storage.session.get("cpdownPendingCtx");c=st&&st.cpdownPendingCtx||null;if(c)_cpdownLog("ctx restored from storage.session")}catch(e){}}try{await R.storage.session.remove("cpdownPendingCtx")}catch(e){}return c}
 function _cpdownShowToast(tabId,payload){return R.scripting.executeScript({target:{tabId:tabId},files:["content-scripts/toast-overlay.js"]}).then(function(){return R.tabs.sendMessage(tabId,{type:"SHOW_TRANSCRIPT_TOAST",payload:payload})}).catch(function(e){console.error("[cpdown] toast err:",e)})}
+var _cpdownShownTabId=null;
 R.runtime.onMessage.addListener(function _cpdownOnMsg(a,b){
+ if(a.type==="TRANSCRIPT_NEED_VISIBLE"){
+  // A background tab gets no captions from YouTube: show it for a moment (it is muted).
+  if(b&&b.tab&&b.tab.id!=null){_cpdownShownTabId=b.tab.id;_cpdownLog("showing the video tab for a moment");try{R.tabs.update(b.tab.id,{active:true})}catch(e){}}
+  return
+ }
  if(a.type==="TRANSCRIPT_RESULT"){
   (async function(){
   if(a.payload&&a.payload.debug)_cpdownLog("transcript steps:\n"+a.payload.debug.join("\n"));
   var c=await _cpdownTakeCtx();
   if(!c){_cpdownLog("TRANSCRIPT_RESULT ignored: no pending request");return}
+  if(c.hiddenTabId&&_cpdownShownTabId===c.hiddenTabId){try{await R.tabs.update(c.originalTabId,{active:true})}catch(e){}}
+  _cpdownShownTabId=null;
   if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(e){}
   if(a.payload.error)_cpdownLog("error:",a.payload.error);else _cpdownLog("ok, chars:",(a.payload.markdown||"").length);
   _cpdownShowToast(c.originalTabId,a.payload);
@@ -72,10 +80,11 @@ async function _cpdownExtract(c,originalTabId){
  try{
   var u=new URL(c),d=u.searchParams.get("v");if(!d&&u.hostname==="youtu.be"){d=u.pathname.slice(1).split("/")[0]};if(!d){_cpdownShowToast(b.id,{error:"Not a YouTube video link"});return}
   var e=await R.tabs.create({url:c,active:false});
+  try{await R.tabs.update(e.id,{muted:true})}catch(x){}
   _cpdownLog("open hidden tab for",d);
   _cpdownSaveCtx({originalTabId:b.id,hiddenTabId:e.id});
   if(_cpdownWatchdog)clearTimeout(_cpdownWatchdog);
-  _cpdownWatchdog=setTimeout(async function(){var c=await _cpdownTakeCtx();if(!c)return;_cpdownLog("watchdog: no result in 35s");if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(x){}_cpdownShowToast(c.originalTabId,{error:"YouTube did not respond in time (35s). Please try again."})},35000);
+  _cpdownWatchdog=setTimeout(async function(){var c=await _cpdownTakeCtx();if(!c)return;_cpdownLog("watchdog: no result in 50s");if(c.hiddenTabId&&_cpdownShownTabId===c.hiddenTabId){try{await R.tabs.update(c.originalTabId,{active:true})}catch(x){}}_cpdownShownTabId=null;if(c.hiddenTabId)try{R.tabs.remove(c.hiddenTabId)}catch(x){}_cpdownShowToast(c.originalTabId,{error:"YouTube did not respond in time (50s). Please try again."})},50000);
   await new Promise(function(f,g){
    var h=setTimeout(function(){R.tabs.onUpdated.removeListener(i);g(new Error("Timeout"))},15000);
    function i(j,k){if(j===e.id&&k.status==="complete"){R.tabs.onUpdated.removeListener(i);clearTimeout(h);f()}}

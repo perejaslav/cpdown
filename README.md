@@ -82,6 +82,11 @@ npm run build  # production
 
 ## 🧾 Changelog
 
+### v1.13.2
+
+- **Fix:** "Copy subtitles" still returned "YouTube returned empty subtitles" — YouTube gives captions only to a tab that is really shown, so when the background tab gets nothing the extension now shows the (muted) video tab for a few seconds and switches back
+- **Fix:** "Unsafe attempt to load URL … youtube-main-world.js" errors on the extensions page — the script is now declared in the manifest instead of being injected with a script tag
+
 ### v1.13.1
 
 - **Fix:** Right-click "Copy subtitles" failed with "YouTube returned empty subtitles" — the extension now waits for the player's caption token, signs the transcript request for signed-in users, and as a last resort reads the transcript panel from the page
